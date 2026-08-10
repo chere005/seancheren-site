@@ -5199,6 +5199,22 @@ t('phone widths swap the pill nav for a dropdown', function () {
     eq(2, substr_count($b, '>Themes</a>'), 'the dropdown lists the same pages the pills do');
 });
 
+t('About\'s two-column lists line up row for row', function () {
+    $b = req('GET', '/about/')['body'];
+    has('class="lists-col"', $b, 'About sets its favourites in columns');
+    // A column break truncates the margin above whichever item starts a new column, so a
+    // symmetric margin lands on the first column's first item and on nothing else — which
+    // sat the two columns 3.2px out of step. The gap hangs below every item instead.
+    ok(preg_match('/^  li \{ margin: 0 0 [\d.]+rem; \}$/m', $b) === 1,
+       'list items carry a bottom margin only, never a top one');
+    hasnt('li { margin: 0.2rem 0; }', $b, 'the symmetric margin is what knocked them out of step');
+    // The columns flow independently, so their rows only line up while every item is one
+    // line tall. .wrap caps at 640px, so above that the columns are a fixed width the
+    // titles fit; below it they narrow and a wrapped title steps its column past the other.
+    ok(preg_match('/@media \(max-width: 640px\) \{ \.lists-col ul \{ columns: 1; \} \}/', $b) === 1,
+       'and fall to one column below the wrap cap, not at the nav\'s 480');
+});
+
 t('the theme picker shows all four themes, read-only, current marked', function () {
     $b = req('GET', '/themepicker/')['body'];
     foreach (THEMES as $key => $row) {

@@ -471,7 +471,13 @@ PNGs), which never leak into the apps — they keep their own. The pill nav is c
 phone widths swap it for a no-JS `<details>` dropdown whose summary names the current
 page (the swap and both page lists are pinned; how it opens is by eye). Projects nests Theme
 Picker and CalMind as subsections (h4) under Vibe Coding Apps — the shell must style that
-level — and lists the Private categories (Work, Music, Games, Languages).
+level — and lists the Private categories (Work, Music, Games, Languages). About's two
+favourites lists run in two columns whose rows have to line up: list items carry a bottom
+margin only (a column break truncates the margin over whichever item starts a column, so a
+top margin lands on the first column's first item alone and sits the two 3.2px out of
+step), and the lists fall to one column below 640px — the width `.wrap` caps at, under
+which the columns narrow and a wrapped title steps its column past the other's. Both are
+pinned as CSS text; the alignment itself is by eye, the harness running no layout.
 
 ### `quick`
 `quick.php` is the one page the widget can reach that writes. A quick add lands on today

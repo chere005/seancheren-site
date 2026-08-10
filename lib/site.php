@@ -126,11 +126,19 @@ function site_page($active, $title, $bodyHtml) {
   a { color: var(--accent); text-underline-offset: 2px; }
   a:hover { opacity: 0.8; }
   ul { margin: 0.5rem 0; padding-left: 1.25rem; }
-  li { margin: 0.2rem 0; }
+  /* Gap below only, never above: a column break truncates the margin over whichever item
+     starts a new column, so a top margin lands on the first column's first item and on
+     nothing else — which sat the two columns of .lists-col a few pixels out of step. On an
+     ordinary list this changes nothing, since that margin only ever collapsed into ul's. */
+  li { margin: 0 0 0.2rem; }
   .sig { margin-top: 1.5rem; color: var(--muted); }
   .sig .date { font-size: 0.85rem; }
+  /* Two columns flow independently, so their rows only line up while every item is one
+     line tall. .wrap caps at 640px, so above that the columns are a fixed 284px and the
+     items fit; below it they narrow and the long titles start wrapping, stepping one
+     column out of step with the other — hence one column from there down, not from 480. */
   .lists-col ul { columns: 2; column-gap: 2rem; }
-  @media (max-width: 480px) { .lists-col ul { columns: 1; } }
+  @media (max-width: 640px) { .lists-col ul { columns: 1; } }
 </style>
 </head>
 <body>

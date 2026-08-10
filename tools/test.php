@@ -5408,6 +5408,27 @@ t('deploy.sh parses', function () use ($root) {
     eq(0, $rc, 'bash -n: ' . implode("\n", $o));
 });
 
+t('an empty array expansion never trips set -u', function () use ($root) {
+    // macOS ships bash 3.2, where "${a[@]}" on an EMPTY array counts as unset and the
+    // scripts' `set -u` kills the run mid-deploy. The exclude array is only non-empty on
+    // a test push, so a bare expansion breaks `prod`/`both` while every test deploy — and
+    // every --dry-run of one — sails through, which is exactly how it went unnoticed.
+    foreach (['deploy.sh', 'deploy-dev.sh'] as $f) {
+        $s = (string) file_get_contents($root . '/' . $f);
+        $code = implode("\n", array_map(
+            fn($l) => (string) preg_replace('/#.*$/', '', $l), preg_split('/\R/', $s)));
+        // Drop the guarded form, then anything array-shaped still left is a bare one.
+        $left = preg_replace('/\$\{(\w+)\[@\]\+"\$\{\1\[@\]\}"\}/', '', $code);
+        ok(!preg_match('/\$\{\w+\[@\]\}/', $left, $m),
+           "$f expands an array bare (" . ($m[0] ?? '') . ') — use ${a[@]+"${a[@]}"}');
+    }
+    has('${skip[@]+"${skip[@]}"}', (string) file_get_contents($root . '/deploy.sh'),
+        'the guarded form is what ships');
+    // And prove the idiom rather than just its spelling — on this machine's own bash.
+    exec('bash -c ' . escapeshellarg('set -u; a=(); printf ok ${a[@]+"${a[@]}"}') . ' 2>&1', $o, $rc);
+    eq(0, $rc, 'the guarded form survives an empty array: ' . implode("\n", $o));
+});
+
 t('it never deletes and never sends a config', function () use ($root) {
     $s = (string) file_get_contents($root . '/deploy.sh');
     foreach (preg_split('/\R/', $s) as $n => $line) {

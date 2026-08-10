@@ -502,7 +502,12 @@ always receives real files in the pre-split layout. `deploy-dev.sh` gets the sam
 treatment: it parses, no rsync line uses `--delete`, its lib rsync excludes `config.php`,
 no rsync/rm line names a live data directory, and its destinations stay the /dev
 constants with the refusal guards standing — the script's whole reason to exist is that
-it cannot reach production or `/test/`.
+it cannot reach production or `/test/`. Neither script may expand an array bare
+(`"${a[@]}"`): macOS ships bash 3.2, where an *empty* array counts as unset and `set -u`
+kills the run — and since the only such array is non-empty on a test push and empty on a
+prod one, a bare expansion breaks `prod`/`both` while every test deploy, dry run included,
+sails through. The guarded `${a[@]+"${a[@]}"}` is pinned by text, and the idiom itself is
+proved against the machine's own bash.
 
 ## What only eyes can check
 

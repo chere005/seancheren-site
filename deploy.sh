@@ -91,8 +91,11 @@ push_instance() {   # $1 = public dest   $2 = lib dest   $3 = human label
   local skip=()
   [[ "$pub" == /home/public/test ]] && skip=(--exclude='/calmind')
   echo "==> [$label] public/ -> $pub/"
+  # ${skip[@]+"${skip[@]}"}, not a bare "${skip[@]}": macOS ships bash 3.2, where an empty
+  # array expansion counts as unset and set -u kills the script. Only prod leaves skip
+  # empty, so a bare expansion breaks `prod`/`both` while test deploys sail through.
   rsync -rLptzv $DRY -e "$SSH" \
-    --exclude='.DS_Store' --exclude='*.swp' "${skip[@]}" \
+    --exclude='.DS_Store' --exclude='*.swp' ${skip[@]+"${skip[@]}"} \
     public/ "$HOST:$pub/"
   echo "==> [$label] lib/    -> $lib/   (config.php protected)"
   rsync -rLptzv $DRY -e "$SSH" \

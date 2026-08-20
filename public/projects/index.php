@@ -35,6 +35,9 @@ $tIcon = '<svg class="giticon" viewBox="0 0 16 16" width="20" height="20" aria-h
   <a class="gitlink" href="https://github.com/chere005/CalMind" title="CalMind on GitHub" aria-label="CalMind on GitHub"><?= $gitIcon ?></a>
 </p>
 
+<h4>AcctMind</h4>
+<p>I have never been a fan of various budgeting apps.. I was nearly happy with one I won't name, but I can't simply set the available amount to a value, I have to do some silly math which ends up being way more keystrokes than I'd like. It's rather amusing how simple it should be to build an app with Claudio that completely replaces this $120/yr product for myself. The UX will be minimal, only including features I actually use personally.</p>
+
 <style>
   .plinks { display: flex; align-items: center; gap: 0.9rem; }
   .gitlink { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; }

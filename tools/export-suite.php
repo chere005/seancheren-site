@@ -60,18 +60,61 @@ if (!preg_match('/^[A-Za-z0-9_-]{1,32}$/', $user)) {
 $cfg = app_config();
 $dir = rtrim((string) $cfg['data_dir'], '/');
 
+/**
+ * THE KEY, BEFORE ANYTHING ELSE — and this guard is the whole reason this
+ * block exists rather than a straight read.
+ *
+ * store.php's data_key() falls back to data/.datakey, and if it cannot READ
+ * that file it does not fail: it generates a fresh random key and writes one.
+ * Under the ssh login the read is denied (the file belongs to the web user,
+ * 0600), so the first run of this tool went down that path, decrypted every
+ * file to nothing with the wrong key, and reported "exported" with counts of
+ * zero. The only reason it was harmless is that the WRITE was denied too. Had
+ * it succeeded it would have replaced the key beside the data and made every
+ * encrypted file on the server permanently unreadable.
+ *
+ * So: prove the real key is in hand before opening anything. Either
+ * config.php names one, or .datakey exists and this process can read it.
+ */
+$keyFile = $dir . '/.datakey';
+if ((string) ($cfg['data_key'] ?? '') === '') {
+    if (!is_file($keyFile)) {
+        fwrite(STDERR, "no data_key in config and no {$keyFile} — refusing (a read here MINTS A NEW KEY)\n");
+        exit(1);
+    }
+    if (!is_readable($keyFile) || trim((string) @file_get_contents($keyFile)) === '') {
+        fwrite(STDERR, "cannot read {$keyFile} as this user.\n");
+        fwrite(STDERR, "Refusing: store.php would silently generate a REPLACEMENT key and every\n");
+        fwrite(STDERR, "encrypted file would stop decrypting. Run as the user that owns the key,\n");
+        fwrite(STDERR, "or set 'data_key' in lib/config.php to the same secret.\n");
+        exit(1);
+    }
+}
+
 $bundle = [];
 $counts = [];
+$present = 0;
+$decoded = 0;
 foreach (EXPORT_KINDS as $kind) {
     $file = user_data_file($dir, $kind, $user);
     if (!is_file($file)) { $counts[$kind] = 'none'; continue; }
+    $present++;
     $data = store_read($file);
     $bundle[$kind] = $data;
     $counts[$kind] = is_array($data) ? count($data) : 1;
+    if (is_array($data) ? $data !== [] : true) { $decoded++; }
 }
 
 if ($bundle === []) {
     fwrite(STDERR, "no data files for that user — nothing written\n");
+    exit(1);
+}
+// Files on disk that ALL decode to nothing is a decrypt failure wearing the
+// costume of an empty account. A real account with seven files has something
+// in at least one of them.
+if ($present > 0 && $decoded === 0) {
+    fwrite(STDERR, "{$present} data files for '{$user}' and every one decoded to nothing.\n");
+    fwrite(STDERR, "That is a wrong key, not an empty account — nothing written.\n");
     exit(1);
 }
 

@@ -78,4 +78,8 @@ the same app (Kotlin + Jetpack Compose, same local-only design) is taking shape 
 
 ## License
 
-BSD 3-Clause — see [LICENSE](LICENSE).
+BSD 3-Clause — see [LICENSE](LICENSE). Do what you like with it: use it,
+change it, fold it into something else, commercially or not, no permission
+needed and no warranty given. The two things the licence does ask are that
+the copyright notice travels with the source, and that you don't use Sean's
+name to endorse whatever you build from it.

@@ -16,3 +16,73 @@ ServerSignature Off
 RewriteEngine On
 RewriteCond %{REQUEST_URI} ^(.*)/(?:CalMind|Calmind|CALMIND|calMind)((?:/.*)?)$
 RewriteRule ^ %1/calmind%2 [R=301,L]
+
+# ── Subdomain routing (Sean, 2026-08-20) ────────────────────────────────────
+#
+# seancheren.com/test/XXXX becomes test.seancheren.com/XXXX, and the same for
+# dev. The aliases serve this one docroot — NFSN gives a site a single
+# /home/public — so the split is done here by HTTP_HOST rather than by giving
+# each subdomain a root of its own.
+#
+# PROD keeps the apex and no subdomain: it is what every app, device and
+# browser points at. test and dev are web-only.
+#
+# The !^/test/ condition is what stops the rewrite recursing: without it the
+# rewritten /test/foo comes back round and becomes /test/test/foo.
+RewriteCond %{HTTP_HOST} ^test\. [NC]
+RewriteCond %{REQUEST_URI} !^/test/
+RewriteRule ^(.*)$ /test/$1 [L]
+
+RewriteCond %{HTTP_HOST} ^dev\. [NC]
+RewriteCond %{REQUEST_URI} !^/dev/
+RewriteRule ^(.*)$ /dev/$1 [L]
+
+# …and the old paths on the APEX are GONE — not moved (Sean, 2026-08-20: "it
+# should just stop working"). A 301 would keep every old bookmark and link
+# alive at a new address, which is the opposite of retiring a URL. The apex is
+# prod and nothing else.
+#
+# Host-guarded: on test.seancheren.com the internal rewrite above has already
+# produced /test/..., and 404ing that would break the subdomain itself.
+# Matched on REQUEST_URI, not on the rule pattern, because THIS FILE IS ALSO
+# DEPLOYED INTO /home/public/test/ — deploy.sh rsyncs public/ into the mirror,
+# so a copy of it runs as the per-directory config for everything under /test/.
+# In that copy the per-directory path has already had "test/" stripped, so
+# `RewriteRule ^test/(.*)$` matched nothing and the rule looked broken while
+# the file it was in demonstrably worked (the CalMind capitalisation 301 above
+# kept firing). REQUEST_URI is the whole path in either context.
+# Turning this on the first time broke PROD, and the reason is worth keeping:
+# the web export was built with baseUrl=/test/calmind, so
+# seancheren.com/calmind's index.html loaded its JS from /test/calmind/_expo/…
+# — the very path this rule makes vanish. White screen. The rule was not
+# wrong; the export was pointing somewhere it had no business pointing.
+#
+# baseUrl is /calmind for every instance now, which is what the subdomains
+# made possible: on test.seancheren.com the internal rewrite above maps
+# /calmind to /test/calmind, so ONE export serves all three and no instance
+# reaches into another's directory for its own assets.
+RewriteCond %{HTTP_HOST} !^(test|dev)\. [NC]
+RewriteCond %{REQUEST_URI} ^/(test|dev)/
+RewriteRule ^ - [R=404,L]
+
+# ── Case-insensitive paths, site-wide (Sean, 2026-08-20) ────────────────────
+#
+# "any seancheren.com/xxxxx urls should not be case sensitive". The filesystem
+# is case-sensitive, so /AkisBookshelf 404s while /akisbookshelf serves. The
+# CalMind rule above solves exactly one path by naming its four capitalisations
+# by hand, which does not scale to every app on the site and never covered
+# /Chat, /Projects or anything added later.
+#
+# mod_speling does it generally: on a request that would otherwise 404, it
+# looks for a file differing only in case and 301s to the real name.
+# CheckCaseOnly keeps it to CASE — without it the module also "corrects"
+# misspellings and transpositions, which turns a genuine 404 into a redirect
+# to something the visitor did not ask for.
+#
+# Wrapped in IfModule: NFSN's Apache rejects unknown directives in .htaccess
+# with a hard 500, which has taken this whole suite down before (see the note
+# about php_flag at the top of this file).
+<IfModule mod_speling.c>
+  CheckSpelling On
+  CheckCaseOnly On
+</IfModule>

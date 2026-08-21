@@ -29,6 +29,24 @@
 
 header('Content-Type: text/plain; charset=utf-8');
 
+/** The ONLY files this will open — an allow-list, so anything added to the
+ *  data dir later is excluded by default rather than by memory. */
+const EXPORT_KINDS = ['folders', 'reminders', 'notes', 'events', 'calendars', 'calprefs', 'habits'];
+
+/** WHO. Edit this line if the prod usernames differ; nothing is taken from
+ *  the request, so no caller can aim this at an account. */
+const EXPORT_USERS = ['sean', 'aki'];
+
+/**
+ * Somewhere the WEB USER can write, which /home/protected/tools is not — it
+ * belongs to the ssh login, and the first run failed every write against it.
+ * Create it first:
+ *
+ *   mkdir -p /home/protected/tools/out
+ *   chgrp web /home/protected/tools/out && chmod 770 /home/protected/tools/out
+ */
+const OUT_DIR = '/home/protected/tools/out';
+
 $flag = '/home/protected/tools/EXPORT_OK';
 if (!is_file($flag)) {
     // Say nothing useful. An unauthorized caller learns only that this is not
@@ -38,18 +56,16 @@ if (!is_file($flag)) {
     exit;
 }
 
+// Checked before anything is read or deleted: a run that cannot write must
+// not get as far as removing its own flag.
+if (!is_dir(OUT_DIR) || !is_writable(OUT_DIR)) {
+    echo 'REFUSING: ' . OUT_DIR . " does not exist or is not writable by the web user.\n";
+    echo '  mkdir -p ' . OUT_DIR . ' && chgrp web ' . OUT_DIR . ' && chmod 770 ' . OUT_DIR . "\n";
+    exit(1);
+}
+
 require_once '/home/protected/lib/store.php';
 require_once '/home/protected/lib/auth.php';
-
-/** The ONLY files this will open — an allow-list, so anything added to the
- *  data dir later is excluded by default rather than by memory. */
-const EXPORT_KINDS = ['folders', 'reminders', 'notes', 'events', 'calendars', 'calprefs', 'habits'];
-
-/** WHO. Edit this line if the prod usernames differ; nothing is taken from
- *  the request, so no caller can aim this at an account. */
-const EXPORT_USERS = ['sean', 'aki'];
-
-const OUT_DIR = '/home/protected/tools';
 
 $cfg = app_config();
 $dir = rtrim((string) $cfg['data_dir'], '/');
@@ -89,12 +105,22 @@ foreach (EXPORT_USERS as $user) {
         continue;
     }
     $out = OUT_DIR . '/' . $user . '.json';
-    file_put_contents($out, (string) json_encode($bundle, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    // CHECKED. The first version threw this return away, so a run whose every
+    // write was denied still printed "exported", still printed the counts, and
+    // still deleted the flag and itself — announcing success while producing
+    // nothing. Exactly the failure the CLI tool had been fixed for an hour
+    // earlier, made again one layer up.
+    $bytes = @file_put_contents($out, (string) json_encode($bundle, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    if ($bytes === false || $bytes === 0) {
+        echo "{$user}: COULD NOT WRITE {$out} — nothing exported for this user\n";
+        $failed = true;
+        continue;
+    }
     // 0640 + group web: the ssh login is IN group web (id showed 25000), so
     // this is the one thing it will be able to read afterwards.
     @chgrp($out, 'web');
     @chmod($out, 0640);
-    echo "exported {$user} -> {$out}\n";
+    echo "exported {$user} -> {$out} ({$bytes} bytes)\n";
     foreach ($counts as $k => $n) { echo "  {$k}: {$n}\n"; }
 }
 

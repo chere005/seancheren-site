@@ -157,3 +157,59 @@ The Calendar's day-panel buttons are the reference for button sizing across the 
 - Before every deploy, re-check that each `+`/icon button you touched is visually centred (`display: inline-flex; align-items: center; justify-content: center`) — see the icon-button rule under UI conventions.
 - Match the existing style: procedural PHP, short helper functions with one-line docblocks, `e()` for escaping, inline `<style>`/`<script>` in the page.
 - To exercise a page without credentials, drive it from the CLI: start a session, set `$_SESSION['auth']`/`$_SESSION['user']`, set `$_SERVER['REQUEST_URI']`, then `require` the page. That renders (or POSTs to) it exactly as the server would, and it's the fastest way to check a change end-to-end.
+
+### Standing rules
+
+- **Behaviour lives in `lib/`; a page holds plumbing.** If you can describe a
+  rule in a sentence, it belongs in a helper with a test — not inlined in one
+  app's `index.php`, where the next app reimplements it half a shade
+  differently and the two drift apart for a year before anyone notices.
+- **This repo is the spec the CalMind monorepo greps.** Its `CLAUDE.md` sends
+  every "match prod" question here, so the CSS and PHP in this tree settle
+  arguments over there. Changing a look is fine; changing it without saying so
+  means the other codebase is now wrong and nobody knows it. Where this file
+  and the code disagree, that is a question for Sean, not a side to pick.
+- **Two sessions share this repo.** `git pull --autostash` first, stage
+  explicit paths, never `git add -A` — another agent's half-finished work must
+  not ride along on your commit.
+- **Production is never touched unless Sean says so in that message.** A bare
+  `./deploy.sh` is test-only for exactly this reason. A fix goes to test and
+  prod together; a feature goes to test and waits for him before `promote`.
+  Approval for one change is not approval for the next.
+- **Anything that tests a deploy script must neuter `ssh`/`rsync` in its copy
+  first.** In the sibling repo, a run that proved the consent gate worked — by
+  removing the consent gate — went on to write production. The `deploy` test
+  area here only reads the scripts as text and parses them with `bash -n`, and
+  proves an idiom by running a one-line snippet rather than the script itself.
+  Keep it that way.
+- **Sean's data is his.** Reading his live suite to find a bug is fine and has
+  found real ones. Writing to it, reordering his sections, or seeding over his
+  account is not. `tools/seed-example.php` and `tools/seed-buddy.php` touch the
+  demo accounts and nothing else — that is why they exist.
+
+### Traps that have cost real time
+
+- **A check that cannot fail looks exactly like one that passes.** Break the
+  thing a new test guards and watch it go red before trusting it. This has
+  already bitten here: the harness looked for `'Warning:'` in pages that render
+  `<b>Warning</b>:`, so every PHP warning sailed through green for as long as
+  that check existed. `quiet()` in `tools/test.php` is the repair.
+- **The shell's working directory persists between Bash calls**, and a `cd`
+  inside one announces nothing. Use absolute paths, or the next command runs
+  somewhere you did not mean.
+- **Comments state intent; the code may have drifted.** Trust the code and fix
+  the comment. Two real bugs in the sibling repo came from reading one against
+  the other.
+- **Ask what happens when a write fails.** The expensive bugs here are the
+  silent ones — a `store_write()` whose `false` goes nowhere, a suppressed
+  `@file_put_contents`, a data dir the web user cannot write. That last one is
+  exactly how a seeding run printed "Seeded…" over a hundred failed writes.
+- **Some bugs exist only on the phone.** The by-eye column above covers what
+  the harness cannot run; the device adds its own — `env(safe-area-inset-*)`,
+  `window.navigator.standalone`, a fixed overlay that sits under the clock, a
+  tap target that is comfortable with a mouse and cramped with a thumb. Open it
+  on the phone before calling a layout done.
+- **Prefer Sean's shapes to your imagination.** Invented test data agrees with
+  whoever invented it. The seeders build realistic reminders, events and habit
+  history on purpose, so there is a way to test against plausible shapes
+  without going near his account.

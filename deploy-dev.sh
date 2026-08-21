@@ -179,7 +179,9 @@ ensure_dev_config
 # that stitch the top-level calmind/ area into public/ and lib/, so the server gets real
 # files and its layout is unchanged by the repo split.
 echo "==> [DEV] public/ -> $PUB/"
-rsync -rLptz $DRY -e "$SSH" --exclude='.DS_Store' --exclude='*.swp' "$SRC/public/" "$HOST:$PUB/"
+# --exclude=/calmind: /dev/calmind is the NEW CalMind app's dev instance since
+# 2026-08-20, not this suite's. Same reason deploy.sh skips it everywhere.
+rsync -rLptz $DRY -e "$SSH" --exclude='.DS_Store' --exclude='*.swp' --exclude='/calmind' "$SRC/public/" "$HOST:$PUB/"
 echo "==> [DEV] lib/    -> $LIB/   (config.php protected)"
 rsync -rLptz $DRY -e "$SSH" --exclude='config.php' --exclude='.DS_Store' --exclude='*.swp' "$SRC/lib/" "$HOST:$LIB/"
 if [ -z "$DRY" ]; then

@@ -5499,15 +5499,24 @@ t('a bare deploy is the test instance, never production', function () use ($root
     ok(strpos($s, 'promote') !== false, 'and promote exists to move test into prod');
 });
 
-t('the test instance and promote both leave /test/calmind/ to the new app', function () use ($root) {
-    // Since 2026-08-08 /test/calmind/ belongs to the NEW CalMind monorepo (~/GIT/CalMind,
-    // its own deploy script). A suite test-deploy must skip it, and promote must never
-    // copy it onto prod — prod's suite is only updated by a direct prod deploy.
+t('EVERY instance leaves calmind/ to the new app, prod included', function () use ($root) {
+    // /test/calmind/ has belonged to the CalMind monorepo since 2026-08-08, and
+    // /home/public/calmind since 2026-08-20, when the new app took over prod and this
+    // suite's pages moved to /home/protected/suite-retired.
+    //
+    // The exclusion used to be test-only, under a comment saying "Prod still gets the
+    // suite" — true when it was written, and false the moment the cutover happened. A
+    // prod deploy would have rsynced the retired pages straight back over the live app,
+    // and nothing here would have objected: this test only ever asked about test.
     $s = (string) file_get_contents($root . '/deploy.sh');
-    has("[[ \"\$pub\" == /home/public/test ]] && skip=(--exclude='/calmind')", $s,
-        'the test destination excludes the top-level calmind/');
+    has("local skip=(--exclude='/calmind')", $s,
+        'the exclusion is unconditional, not per-destination');
+    ok(strpos($s, '== /home/public/test ]] && skip=') === false,
+        'and no longer keyed to the test destination alone');
     has('--exclude=/calmind /home/public/test/ /home/public/', $s,
         'promote excludes it from the server-side copy');
+    $d = (string) file_get_contents($root . '/deploy-dev.sh');
+    has("--exclude='/calmind'", $d, 'and dev skips it too');
 });
 
 t('deploy-dev.sh parses and keeps the same safety rules', function () use ($root) {

@@ -85,11 +85,14 @@ echo "    all PHP OK."
 # layout is unchanged by the repo split.
 push_instance() {   # $1 = public dest   $2 = lib dest   $3 = human label
   local pub="$1" lib="$2" label="$3"
-  # /test/calmind/ belongs to the NEW CalMind app (the ~/GIT/CalMind monorepo, its own
-  # deploy script) as of 2026-08-07 — a test deploy of this suite must not clobber it.
-  # Anchored so only the top-level calmind/ is skipped. Prod still gets the suite.
-  local skip=()
-  [[ "$pub" == /home/public/test ]] && skip=(--exclude='/calmind')
+  # calmind/ belongs to the NEW CalMind app (the ~/GIT/CalMind monorepo, its own
+  # deploy script) — on TEST since 2026-08-07 and on PROD since 2026-08-20, when it
+  # took over /home/public/calmind and the suite's pages moved to
+  # /home/protected/suite-retired. This exclusion used to be test-only, under a
+  # comment reading "Prod still gets the suite"; a prod deploy after the cutover
+  # would have rsynced the retired suite straight back over the live app.
+  # Anchored, so only the top-level calmind/ is skipped.
+  local skip=(--exclude='/calmind')
   echo "==> [$label] public/ -> $pub/"
   # ${skip[@]+"${skip[@]}"}, not a bare "${skip[@]}": macOS ships bash 3.2, where an empty
   # array expansion counts as unset and set -u kills the script. Only prod leaves skip

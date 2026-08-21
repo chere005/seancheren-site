@@ -4441,13 +4441,15 @@ t('the sandbox writes nowhere near the outer run, let alone data/', function () 
 // half-made account must not be an account, and five wrong codes must end it.
 area('signup');
 
-t('the create-account window warns that passwords are not encrypted yet', function () {
-    // Until sign-up storage hashes passwords, the window has to say so before anyone
-    // types a password they use elsewhere.
+t('the create-account window no longer warns, because it no longer has to', function () {
+    // It used to say "not encrypted at this time during development — don't use a
+    // real password", and that was the honest thing to print while sign-up stored
+    // the password as typed. Storage hashes now (auth_password_set), so the warning
+    // would be a lie, and a stale warning about passwords is worse than none: it
+    // teaches people to ignore the next one.
     $b = req('GET', '/calmind/reminders/')['body'];
-    has('class="warn"', $b, 'the warning line is there');
-    has('not encrypted at this time', $b, 'and says what it needs to');
-    has("don't use a real password", $b, 'with the instruction that follows from it');
+    ok(strpos($b, 'not encrypted at this time') === false, 'the warning is gone');
+    ok(strpos($b, "don't use a real password") === false, 'and so is its instruction');
 });
 
 t('a sign-up is refused unless the username, email and password are all right', function () use ($scratch) {
@@ -4509,7 +4511,14 @@ t('the right code makes the account and signs you in', function () use ($scratch
     eq('/calmind/calendar/', $r['location'], 'straight into the app');
     $acc = store_read($scratch . '/accounts.json');
     ok(isset($acc['newbie']), 'the account is real now');
-    eq('newbiepass', $acc['newbie']['password'] ?? null);
+    // HASHED, not stored. This assertion read `eq('newbiepass', …)` until
+    // 2026-08-20 and passed for months, which is precisely what it was telling
+    // anyone who looked: the account file held the real password. It now proves
+    // the opposite in both directions — the stored value is not the password,
+    // and it verifies against it.
+    $stored = (string) ($acc['newbie']['password'] ?? '');
+    ok($stored !== 'newbiepass', 'the account record does not hold the password');
+    ok(password_verify('newbiepass', $stored), 'but it verifies against it');
     ok(!isset(store_read($scratch . '/signups.json')['newbie']), 'and no longer pending');
 });
 
@@ -4590,13 +4599,43 @@ t('a changed password takes effect and the old one stops working', function () {
        'the new one works');
 });
 
+t('a legacy PLAINTEXT password still logs in, and is hashed on the way through', function () use ($scratch) {
+    // The upgrade path, and the reason the old shape is still accepted at all:
+    // every account on the live server was stored as typed until 2026-08-20, and
+    // refusing them outright would have locked everyone out at once. So a stored
+    // plaintext is compared in constant time, and the moment it matches — the one
+    // moment the real password is in hand and known to be right — it is rewritten
+    // as a hash. No reset email, nothing for anyone to do.
+    ensure_account('legacy', 'legacypassword');
+    $file = $scratch . '/passwords.json';
+    $pw = store_read($file);
+    $pw['legacy'] = 'legacypassword';          // exactly what the old code wrote
+    store_write($file, $pw);
+    ok(store_read($file)['legacy'] === 'legacypassword', 'the legacy shape is on disk');
+
+    $jar = login('legacy', 'legacypassword');  // throws unless it redirects
+    ok($jar !== [], 'the old password still works');
+
+    $after = (string) store_read($file)['legacy'];
+    ok($after !== 'legacypassword', 'and the plaintext is gone from disk');
+    ok(password_verify('legacypassword', $after), 'replaced by a hash of it');
+
+    // …and the upgraded hash is what the NEXT login checks against.
+    ok(login('legacy', 'legacypassword') !== [], 'the account still opens afterwards');
+});
+
 t('a stored password wins over the account record it overrides', function () use ($scratch) {
     // passwords.json is the override, because config.php is hand-kept on the server and
     // never deployed. Deleting it has to fall back rather than lock the account out.
     $pw = store_read($scratch . '/passwords.json');
     ok(isset($pw['newbie']), 'the override is on disk');
-    eq('newbiepass', store_read($scratch . '/accounts.json')['newbie']['password'] ?? null,
-       'and the account record still holds the original');
+    // Both files hold HASHES now, and neither holds the password. What this test
+    // is really about is that the override exists and the account record was not
+    // rewritten under it — so check the shape, not the string.
+    $acct = (string) (store_read($scratch . '/accounts.json')['newbie']['password'] ?? '');
+    ok($acct !== '' && $acct !== 'newbiepass', 'the account record still has its own value');
+    ok((string) $pw['newbie'] !== $acct, 'and the override is a different one');
+    ok(password_verify('brandnewpass', (string) $pw['newbie']), 'the override is the NEW password');
 });
 
 t('the theme is set over AJAX, refuses a name it does not know, and sticks', function () use ($scratch) {

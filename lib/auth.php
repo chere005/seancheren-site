@@ -135,12 +135,48 @@ function auth_password_for(array $cfg, string $user): ?string
     return isset($own[$user]) ? (string) $own[$user] : (string) $users[$user];
 }
 
-/** Store a new password for $user. */
+/**
+ * Does $given match what is stored, and is what is stored out of date?
+ *
+ * Returns [ok, needsUpgrade]. Until 2026-08-20 every password here was kept
+ * AS TYPED — passwords.json, accounts.json and the pending-signup store all
+ * held the real thing, and login was a hash_equals() against it. The store is
+ * encrypted at rest, but that key sits beside the data, so it was obfuscation
+ * and not hashing: anyone reading the data dir read everyone's passwords, and
+ * password reuse made that everyone else's problem too.
+ *
+ * Both shapes are accepted on the way in, because the alternative is locking
+ * every existing account out at once. A stored value that password_get_info()
+ * can name is a real hash and gets password_verify(); anything else is a
+ * legacy plaintext, compared in constant time and reported as needing an
+ * upgrade. The caller rewrites it — see the login path.
+ */
+function auth_password_check(string $want, string $given): array
+{
+    if ($want === '' || $given === '') {
+        return [false, false];
+    }
+    if ((password_get_info($want)['algo'] ?? null)) {
+        return [password_verify($given, $want), password_needs_rehash($want, PASSWORD_DEFAULT)];
+    }
+    // LEGACY: the stored value IS the password.
+    return [hash_equals($want, $given), true];
+}
+
+/**
+ * Store a new password for $user — hashed, always.
+ *
+ * passwords.json WINS over config.php's entry (see auth_password_for), which
+ * is what makes upgrade-on-login work for accounts seeded in config: the
+ * plaintext there is simply never consulted again once a hash lands here.
+ * config.php is hand-kept on the server and never deployed, so this is the
+ * only place code can put one.
+ */
 function auth_password_set(array $cfg, string $user, string $password): void
 {
     $file = auth_passwords_file($cfg);
     $own  = store_read($file);
-    $own[$user] = $password;
+    $own[$user] = password_hash($password, PASSWORD_DEFAULT);
     store_write($file, $own);
 }
 
@@ -369,7 +405,14 @@ function require_login(string $area = 'App'): void
         $u = (string) $_POST['username'];
         $p = (string) $_POST['password'];
         $want = auth_password_for($cfg, $u);
-        if ($want !== null && hash_equals($want, $p)) {
+        [$ok, $needsUpgrade] = $want === null ? [false, false] : auth_password_check($want, $p);
+        if ($ok) {
+            // UPGRADE ON LOGIN: the one moment the plaintext is in hand and
+            // known to be right. Every account converts the next time its
+            // owner signs in, with nothing for them to do and no reset email.
+            if ($needsUpgrade) {
+                auth_password_set($cfg, $u, $p);
+            }
             session_regenerate_id(true);
             $_SESSION['auth'] = true;
             $_SESSION['user'] = $u;
@@ -427,7 +470,8 @@ function require_login(string $area = 'App'): void
         $cur = (string) ($_POST['current'] ?? '');
         $new = (string) ($_POST['new'] ?? '');
         $want = auth_password_for($cfg, $me);
-        if ($want === null || !hash_equals($want, $cur)) {
+        [$curOk] = $want === null ? [false] : auth_password_check($want, $cur);
+        if (!$curOk) {
             echo json_encode(['ok' => false, 'error' => 'That is not your current password.']);
         } elseif (strlen($new) < 6) {
             echo json_encode(['ok' => false, 'error' => 'Use at least 6 characters.']);
@@ -509,8 +553,12 @@ function signup_handle(array $cfg): array
         // Fixed while sending is off — see signup_send_code(). Back to
         // str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT) once mail works.
         $code = SIGNUP_CODE;
-        $pending[$user] = ['email' => $email, 'password' => $pass, 'code' => $code,
-                           'expires' => time() + 900, 'tries' => 0];
+        // Hashed BEFORE it is stored, not when the account is created: the
+        // pending store is a file on disk like any other, and a signup that is
+        // never confirmed would otherwise leave a real password sitting in it
+        // for its fifteen minutes.
+        $pending[$user] = ['email' => $email, 'password' => password_hash($pass, PASSWORD_DEFAULT),
+                           'code' => $code, 'expires' => time() + 900, 'tries' => 0];
         store_write(signups_file($cfg), $pending);
         if (!signup_send_code($cfg, $email, $code)) {
             return ['signup', 'Couldn\'t send the email. Try again in a moment.', ''];
@@ -679,7 +727,6 @@ function render_login(string $area, string $error = '', string $stage = 'login',
       <input id="email" type="email" name="email" autocomplete="email" required>
       <label for="newpass">Password</label>
       <input id="newpass" type="password" name="newpass" autocomplete="new-password" minlength="6" required>
-      <p class="warn">Passwords are not encrypted at this time during development &mdash; don't use a real password.</p>
       <button type="submit">Send verification code</button>
       <button type="button" class="cancel" data-close>Cancel</button>
     </form>

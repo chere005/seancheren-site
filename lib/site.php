@@ -4,7 +4,7 @@
 // cookie from /themepicker/ — midnight (the original #111/#eee/#34d399 look) by default.
 // The cookie only dresses these pages; the apps keep their own per-user theme prefs.
 
-require_once __DIR__ . '/auth.php';   // THEMES / theme_vars()
+require_once __DIR__ . '/auth.php';   // THEMES / theme_vars() — and hitlog.php with it
 
 /** The theme these public pages wear: the sitetheme cookie when it names a real one. */
 function site_theme(): string {
@@ -40,6 +40,10 @@ function site_nav($active) {
 }
 
 function site_page($active, $title, $bodyHtml) {
+  // THE HIT LOG'S HOOK for the public pages, which have no login to hang it
+  // on. Every one of them ends in site_page(), so this is the one call they
+  // all make — a new marketing page inherits the logging by rendering.
+  hit_log();
   $nav = site_nav($active);
   // Root-relative for the same reason as the nav above: on a sandbox subdomain '/' is
   // already that sandbox's home.

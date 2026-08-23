@@ -13,6 +13,7 @@
 require_once __DIR__ . '/store.php';    // encrypted-at-rest storage helpers
 require_once __DIR__ . '/mail.php';     // sending the sign-up verification code
 require_once __DIR__ . '/usagelog.php'; // per-user usage log (hooked below)
+require_once __DIR__ . '/hitlog.php';   // one line per REQUEST — see its header
 
 function app_config(): array
 {
@@ -391,6 +392,11 @@ function session_boot(): void
 function require_login(string $area = 'App'): void
 {
     session_boot();
+    // THE HIT LOG'S HOOK for everything behind the login. It is here rather
+    // than in each page for the same reason usage_log's is: a page inherits it
+    // by calling require_login, which every one of them already does, so a new
+    // page cannot forget. After session_boot, so the row can name the user.
+    hit_log();
 
     // Logout
     if (isset($_GET['logout'])) {

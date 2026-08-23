@@ -49,7 +49,14 @@ function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES
 // every dtp/tdtp run, pushed here over the same SSH deploy credentials used
 // for regular deploys. Kept OUTSIDE public/ so it's never web-exposed on its
 // own — this page is the only reader. Last 5 runs only; dtp.sh trims the rest.
+// Absolute on the server, with a local fallback beside the repo's own data/
+// dir — without it this page could never be looked at anywhere but production,
+// which is the one place a rendering bug is expensive to find.
 $historyPath = '/home/protected/status/history.json';
+if (!is_file($historyPath)) {
+    $local = __DIR__ . '/../../data/status-history.json';
+    if (is_file($local)) { $historyPath = $local; }
+}
 $history = [];
 if (is_file($historyPath)) {
     $raw = json_decode((string) file_get_contents($historyPath), true);
@@ -137,7 +144,9 @@ $endpoints = [
     ],
 ];
 
-$cachePath = '/home/protected/status/reachability-cache.json';
+$cachePath = is_dir('/home/protected/status')
+    ? '/home/protected/status/reachability-cache.json'
+    : sys_get_temp_dir() . '/sc-status-reachability.json';
 $cacheTtl = 45;
 $results = null;
 if (is_file($cachePath) && (time() - filemtime($cachePath)) < $cacheTtl) {
@@ -449,7 +458,13 @@ if (!is_array($results)) {
     <p class="dek">
       CalMind, ChefMind, AcctMind and MyCalMind, plus CoreMind's shared
       tooling behind all of them.
-      <strong><?= $isRunning ? 'A dtp/tdtp is running right now.' : 'Last updated 2026-08-22, 18:38 CDT.' ?></strong>
+      <?php // Derived, never typed. A hardcoded date on a status page is wrong the
+            // day after it is written, and wrong in the one way nobody checks. ?>
+      <strong><?= $isRunning
+        ? 'A dtp/tdtp is running right now.'
+        : ($latest && !empty($latest['finished_at'])
+            ? 'Last release: ' . e($latest['finished_at']) . '.'
+            : 'No release recorded yet.') ?></strong>
     </p>
   </header>
 
@@ -606,7 +621,9 @@ if (!is_array($results)) {
       ?>
         <button class="run-btn<?= $i === 0 ? ' selected' : '' ?>" data-run="<?= $i ?>">
           <span class="t"><?= e($run['started_at'] ?? '?') ?></span>
-          <span class="k"><?= e(($run['kind'] ?? 'dtp') . ' &middot; ' . ($run['target'] ?? '?')) ?></span>
+          <?php // The separator is OUTSIDE e(): escaping '&middot;' turns its own
+                // ampersand into &amp; and the button reads a literal "&middot;". ?>
+          <span class="k"><?= e($run['kind'] ?? 'dtp') ?> &middot; <?= e($run['target'] ?? '?') ?></span>
           <span class="chip <?= $cls ?>"><?= e($isRun ? 'running' : ($run['status'] ?? '?')) ?></span>
         </button>
       <?php endforeach; ?>

@@ -16,10 +16,15 @@ essentially all of the code, and the rest of this readme.**
 - **Chat** — deliberately public, no login.
 - **Aki's Bookshelf** — behind the login, then gated to one account. Books from the Open
   Library API, per-book rich-text notes, its own themes.
-- **The themes workbench** — behind the login, for building colour palettes. Wired to
-  nothing on purpose, so playing with colours can't repaint something someone is using.
-- **A status page** — behind the login, gated to one account: deploy and sync status for
-  the Mind-suite repos, their release history, and live endpoint reachability.
+- **The themes workbench** — behind the login, then gated to two accounts, for building
+  colour palettes. Wired to nothing on purpose, so playing with colours can't repaint
+  something someone is using.
+- **A status page** — behind the login, gated to one account. Four tabs: **Current**,
+  the deploy and platform matrix for every repo, with a prod/test/dev picker;
+  **History**, a chart per repo of how each of its platforms has moved; **Live Status**,
+  outbound reachability checks and real sign-in probes against every endpoint on the
+  host; and **Usage**, hit counts per app and per visitor, split into lanes — the owner,
+  other people, agent traffic and each sandbox — over windows from an hour to a year.
 
 ### What used to be here
 
@@ -47,19 +52,19 @@ demo accounts the test run signs in as.
 
 ## Deploy
 
-Two live instances share one source tree — **production** (`/`) and a **`/test/`
-sandbox**, each with its own data, accounts and sessions — deployed by `deploy.sh`.
-It is one-way (Mac → server), lints first, and never sends `config.php`, never touches
-the data dirs, never uses `--delete`.
-
-There was a `/dev/` slot as well; it was removed on 2026-08-23 (Sean: it "shouldn't
-even exist anymore"). It carried no data — `data-dev` was never created — so nothing
-was migrated.
+Three live instances share one source tree — **production** (`/`), a **`/test/` sandbox**
+and a **`/dev/` sandbox**, each with its own data, accounts and sessions — all deployed by
+`deploy.sh`. It is one-way (Mac → server), lints first, and never sends `config.php`,
+never touches the data dirs, never uses `--delete`. The two sandboxes are also reachable
+as `test.seancheren.com` and `dev.seancheren.com`, which are aliases onto this same
+docroot; `public/.htaccess` routes them by hostname.
 
 ```sh
 ./deploy.sh            # → TEST only (the safe default)
-./deploy.sh promote    # copy the verified TEST tree onto PROD (server-side)
+./deploy.sh dev        # → DEV only
 ./deploy.sh both       # → TEST and PROD at once
+./deploy.sh all        # → PROD, TEST and DEV
+./deploy.sh promote    # copy the verified TEST tree onto PROD (server-side)
 ./deploy.sh --dry-run  # preview, change nothing
 ```
 
@@ -67,6 +72,18 @@ The SSH target lives in a gitignored `deploy.conf` (copy `deploy.conf.sample`). 
 in `lib/config.php` (gitignored, never deployed): the user map, the `data_key` for at-rest
 encryption, and NFSN credentials. A blank `data_key` is generated into `data/.datakey` on
 first use — keep it.
+
+## Release
+
+```sh
+tools/tdtp.sh          # the whole test run, then deploy → tag → push
+tools/dtp.sh           # the same lane without the test run
+```
+
+`tdtp.sh` ships `main` only and refuses a tree with uncommitted tracked changes, so a tag
+names exactly what shipped. It runs the test suite, deploys all three instances, then tags
+and pushes. **The tag is the version** — there is no version file — so the newest bare
+`x.y.0` tag is the counter, and a release bumps the minor number.
 
 ## License
 

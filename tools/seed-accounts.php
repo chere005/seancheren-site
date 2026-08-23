@@ -5,11 +5,15 @@
  *   php tools/seed-accounts.php            # local ./data
  *   php tools/seed-accounts.php --force    # overwrite accounts that already exist
  *
- * This replaces seed-example.php and seed-buddy.php, which are gone with the app suite
- * they seeded (2026-08-22). Those two built plausible reminders, events, notes and habit
- * history because there were apps to show them in; what is left here — Chat, Aki's
- * Bookshelf, the themes workbench and the marketing pages — needs no such data. It needs
- * accounts that exist and can log in, so that is all this writes.
+ * IT WRITES ACCOUNTS AND NOTHING ELSE, and that is the whole design. The seeders this
+ * replaced (seed-example.php, seed-buddy.php — deleted with the app suite on 2026-08-22)
+ * built plausible reminders, events, notes and habit history, because there were apps to
+ * show them in. What is left on this site — the marketing pages, Chat, Aki's Bookshelf,
+ * the themes bench and the status page — needs no such data: every one of them renders
+ * on an empty account, and the test run writes whatever it needs through the real page
+ * over real HTTP. So what this owes the run is accounts that exist and can log in, and
+ * that is all it writes — which is why AGENTS.md keeps "touches the demo accounts and
+ * nothing else" as a standing rule.
  *
  * Accounts land in data/accounts.json, the same place a sign-up goes, so nothing about
  * config.php has to change, and every file it writes belongs to these names alone.

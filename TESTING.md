@@ -99,14 +99,19 @@ group-traversable, which is what lets the SSH login tail it on the live host.
 *(By eye: nothing — there is no UI for this log; `tools/usagelog.sh` reads it over SSH.)*
 
 ### `hits`
-One line per page view in `hits.log`, five tab-separated fields, and the
-NEGATIVES that are the actual promise: no IP address, no query string, no path
-below the first segment. A request carrying `X-Status-Probe` leaves no line —
-the status page probes every endpoint on this host every 45s, and without that
-guard most of the hits it reports would be its own. A public page logs `-` for
-the user and a signed-in one names them. `hit_counts()` counts only inside its
-window and counts signed-in visitors apart.
-*(By eye: the KPI row on the status page's Live tab.)*
+One line per page view in `hits.log`, **seven** tab-separated fields (time, instance,
+app, method, user, agent, IP), and the NEGATIVES that are still the promise: no query
+string, no path below the first segment. **The address is asserted present, not absent**
+— that flipped on 2026-08-23 on Sean's instruction, and the field count went five to
+seven with it. A request carrying `X-Status-Probe` leaves no line — the status page
+probes every endpoint on this host every 45s, and without that guard most of the hits it
+reports would be its own. A public page logs `-` for a stranger and **names a signed-in
+visitor**, which is the case that catches the session never being read on a page with no
+login of its own. An agent files itself as `claudio` by header or by a command-line user
+agent, and the half worth testing is the other one: a browser-shaped UA never lands in
+that lane. `hit_counts()` counts only inside its window and counts signed-in visitors
+apart.
+*(By eye: the KPI row on the status page's Live tab, and the whole Usage tab.)*
 
 ### `lib`
 Output is escaped: a palette named `<script>alert(1)</script>` comes back as
@@ -170,7 +175,11 @@ midnight; every app offers the full swatch picker; and no app page may render th
 hardcoded dark-room declarations — the tripwire that keeps a new rule from being written
 with a literal neutral that only works on midnight. What the harness can't see — whether
 the paint actually reads on a cream page — is in the Themes pass under *What only eyes
-can check*.
+can check*. **The themes bench's gate lives here too**: `themes_users()` / `themes_may()`
+are checked with the run's own `SUITE_THEMES_USERS=*` override unset, so the list proved
+is production's (`aki`, `sean`, nobody else, never signed out) — and the override is shown
+to be ignored outside a scratch instance, because a gate an env var alone could widen
+would not be a gate.
 
 ### `chat`
 Open to anyone, no login. A message posts and shows. A message and a name are escaped
@@ -178,7 +187,11 @@ rather than rendered. Whitespace is not a message.
 
 ### `themes`
 The palette workbench (`public/akisthemes/`). Behind the login; opens seeded with the eight
-starters, twelve editable roles each. A colour is stored only when it is a real `#rrggbb` in
+starters, twelve editable roles each. **This run widens the bench's gate to everyone**
+(`SUITE_THEMES_USERS=*`) because it uses this page as its stand-in for "any page behind
+the login"; production admits only `aki` and `sean`, and *that* list is checked directly
+in the `account` area, with the override unset — a gate a test quietly disables is a gate
+nothing tests. A colour is stored only when it is a real `#rrggbb` in
 a real role — a `javascript:` value and an unknown role are both refused, and the refusal is
 reported rather than being reported as success. Add works, delete takes two presses. The one
 that matters most: **editing a palette here leaves Aki's Bookshelf untouched**, which is the

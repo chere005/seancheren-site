@@ -2,7 +2,7 @@
 #
 # Deploy the site to NearlyFreeSpeech.  One-way:  your Mac  ->  the server.
 #
-# Two live instances share ONE source tree (no forked copy of the code):
+# Three live instances share ONE source tree (no forked copy of the code):
 #
 #   PRODUCTION      served at  /          public -> /home/public
 #                                         lib    -> /home/protected/lib
@@ -18,6 +18,8 @@
 #
 # Usage:
 #   ./deploy.sh              deploy the working tree to TEST only        (default; safe)
+#   ./deploy.sh dev          deploy the working tree to the DEV sandbox
+#   ./deploy.sh all          deploy to PROD, TEST and DEV in one go
 #   ./deploy.sh test         same
 #   ./deploy.sh prod         deploy the working tree straight to PRODUCTION
 #   ./deploy.sh both         deploy to TEST *and* PRODUCTION in one go

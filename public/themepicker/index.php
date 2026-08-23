@@ -4,9 +4,6 @@
 // to keep a plain lib-only preamble; they carry this one since 2026-08-22, when a
 // sandbox page turned out to be unable to find a lib at all from one directory down.
 //
-// There was a /dev/ slot too, a second fixed sandbox. Sean, 2026-08-23: it
-// "shouldn't even exist anymore". It held no data — data-dev was never created —
-// so it went whole, code and all.
 // THREE signals, and all three are needed. __DIR__ with a bare strpos for '/test/'
 // missed the instance's OWN top-level page — /home/public/test/index.php sits in
 // /home/public/test, with no trailing slash — so the sandbox home silently loaded

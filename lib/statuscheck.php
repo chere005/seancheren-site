@@ -177,11 +177,14 @@ $repos = [
  * per place it is deployed, and the Current tab was quietly only ever showing
  * production's.
  *
- * THERE IS NO dev. `/dev/` and `dev.seancheren.com` were retired on 2026-08-23
- * at Sean's own instruction ("shouldn't even exist anymore") and both answer
- * 404. The picker is built from this table, so dev reappears the day something
- * is actually deployed there and not before — a chooser offering a place that
- * does not exist is worse than one that does not offer it.
+ * DEV EXISTS AGAIN. It was retired at 22:55 on 2026-08-22 ("shouldn't even
+ * exist anymore") and rebuilt as a real third instance two hours later, on
+ * Sean's word: "deploy a clone from prod to test and dev.. make sure test and
+ * dev have completely separate accounts and data". This block said the
+ * opposite of the three tables directly below it, which have probed
+ * dev.seancheren.com since. The picker is still built from these tables, so an
+ * instance appears here only where something is actually deployed — a chooser
+ * offering a place that does not exist is worse than one that does not.
  *
  * A repo absent from an instance is not a failure, it is an absence: the cell
  * says "not deployed" and the sample records n/a rather than a zero.

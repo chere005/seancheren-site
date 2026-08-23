@@ -4,9 +4,6 @@
 // subdomain and .htaccess maps test.seancheren.com/X to /test/X — so nothing here
 // prefixes a href. Keep this preamble identical when adding a page.
 //
-// There was a /dev/ slot too, a second fixed sandbox. Sean, 2026-08-23: it
-// "shouldn't even exist anymore". It held no data — data-dev was never created —
-// so it went whole, code and all.
 // THREE signals, and all three are needed. __DIR__ with a bare strpos for '/test/'
 // missed the instance's OWN top-level page — /home/public/test/index.php sits in
 // /home/public/test, with no trailing slash — so the sandbox home silently loaded

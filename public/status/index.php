@@ -76,13 +76,23 @@ function severity_chip_class(int $sev): string
 // hit on cross-subdomain requests, and gets real HTTP status codes). Cached
 // briefly on disk so the 60s auto-refresh below doesn't hammer every
 // endpoint on every single page load from every open tab.
-function check_url(string $url): array
+function check_url(string $url, ?string $post = null): array
 {
     $start = microtime(true);
     // GET, not HEAD: several of these are plain procedural pages that don't
     // handle HEAD cleanly and read as unreachable when they aren't.
+    //
+    // $post turns it into a real POST. CalMind's API answers 405 to a GET —
+    // correctly, it is POST-only — which read as down. Its `spaces` action is
+    // the honest probe: the one action that needs no auth, so a 200 here says
+    // the API is up AND that it still reports the space ChefMind syncs into.
+    $http = ['method' => $post === null ? 'GET' : 'POST', 'timeout' => 5, 'ignore_errors' => true];
+    if ($post !== null) {
+        $http['header']  = "Content-Type: application/json\r\n";
+        $http['content'] = $post;
+    }
     $ctx = stream_context_create([
-        'http' => ['method' => 'GET', 'timeout' => 5, 'ignore_errors' => true],
+        'http' => $http,
         'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
     ]);
     $fh = @fopen($url, 'r', false, $ctx);
@@ -95,8 +105,12 @@ function check_url(string $url): array
         fclose($fh);
     }
     $ms = (int) round((microtime(true) - $start) * 1000);
-    $ok = $status >= 200 && $status < 400;
-    return ['ok' => $ok, 'status' => $status, 'ms' => $ms];
+    // 401 and 403 are REACHED, not down — the server answered, it just wants
+    // credentials this page deliberately does not carry. AcctMind sits behind HTTP
+    // Basic and read as unreachable for as long as this only accepted 2xx/3xx.
+    $gated = $status === 401 || $status === 403;
+    $ok = ($status >= 200 && $status < 400) || $gated;
+    return ['ok' => $ok, 'status' => $status, 'ms' => $ms, 'gated' => $gated];
 }
 
 $endpoints = [
@@ -104,8 +118,10 @@ $endpoints = [
         ['label' => 'CalMind — prod',      'url' => 'https://seancheren.com/calmind/',      'auth' => "CalMind's own account system (its API — tokens/passkeys, not the site login)"],
         ['label' => 'CalMind — test',      'url' => 'https://test.seancheren.com/calmind/', 'auth' => "CalMind's own account system, test instance"],
         ['label' => 'CalMind — dev',       'url' => 'https://dev.seancheren.com/calmind/',  'auth' => "CalMind's own account system, dev instance"],
-        ['label' => 'CalMind API',         'url' => 'https://seancheren.com/calmind/api/index.php', 'auth' => "CalMind's own token/passkey auth"],
-        ['label' => 'ChefMind',            'url' => 'https://seancheren.com/ChefMind',      'auth' => "Delegated — no backend of its own, authenticates through CalMind's API (same users/tokens, dedicated \"chef\" sync space)"],
+        ['label' => 'CalMind API',         'url' => 'https://seancheren.com/calmind/api/index.php',
+         'post' => '{"action":"spaces"}',
+         'auth' => "CalMind's own bearer token (or passkey) on every action except this one — `spaces` answers without auth, which is what makes it safe to probe from here"],
+        ['label' => 'ChefMind',            'url' => 'https://seancheren.com/ChefMind/',      'auth' => "Delegated — no backend of its own, authenticates through CalMind's API (same users/tokens, dedicated \"chef\" sync space)"],
         ['label' => 'AcctMind — prod',     'url' => 'https://seancheren.com/AcctMind/',     'auth' => "AcctMind's own, separate account system"],
         ['label' => 'AcctMind — test',     'url' => 'https://test.seancheren.com/AcctMind/', 'auth' => "AcctMind's own account system, test instance"],
     ],
@@ -131,7 +147,7 @@ if (!is_array($results)) {
     $results = [];
     foreach ($endpoints as $group => $list) {
         foreach ($list as $ep) {
-            $results[$group][$ep['url']] = check_url($ep['url']);
+            $results[$group][$ep['url']] = check_url($ep['url'], $ep['post'] ?? null);
         }
     }
     @mkdir(dirname($cachePath), 0700, true);
@@ -638,7 +654,8 @@ if (!is_array($results)) {
     <?php foreach ($endpoints['mindsuite'] as $ep): $r = $results['mindsuite'][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
       <div class="endpoint-row">
         <div><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
-        <div><span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'reachable' : 'unreachable' ?></span></div>
+        <div><span class="chip <?= !$r['ok'] ? 'crit' : (!empty($r['gated']) ? 'done' : 'live') ?>"><?=
+          !$r['ok'] ? 'unreachable' : (!empty($r['gated']) ? 'reachable, gated' : 'reachable') ?></span></div>
         <div class="endpoint-ms"><?= $r['status'] ? $r['status'] . ' &middot; ' . $r['ms'] . 'ms' : '&mdash;' ?></div>
         <div class="endpoint-auth"><?= e($ep['auth']) ?></div>
       </div>
@@ -650,7 +667,8 @@ if (!is_array($results)) {
     <?php foreach ($endpoints['site'] as $ep): $r = $results['site'][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
       <div class="endpoint-row">
         <div><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
-        <div><span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'reachable' : 'unreachable' ?></span></div>
+        <div><span class="chip <?= !$r['ok'] ? 'crit' : (!empty($r['gated']) ? 'done' : 'live') ?>"><?=
+          !$r['ok'] ? 'unreachable' : (!empty($r['gated']) ? 'reachable, gated' : 'reachable') ?></span></div>
         <div class="endpoint-ms"><?= $r['status'] ? $r['status'] . ' &middot; ' . $r['ms'] . 'ms' : '&mdash;' ?></div>
         <div class="endpoint-auth"><?= e($ep['auth']) ?></div>
       </div>

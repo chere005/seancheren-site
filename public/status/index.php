@@ -681,6 +681,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .repo-pick-menu .dot { width: 10px; height: 3px; border-radius: 2px; flex: none; }
   .endpoint-url { font-family: var(--font-mono); font-size: 0.76rem; color: var(--ink-faint); word-break: break-all; }
   .scope-gate { display: inline-block; font-family: var(--font-mono); font-size: 0.72rem; color: var(--partial); }
+  /* When the cell beside it was last actually asked. Its own line so a narrow
+     column never pushes the chip out of shape. */
+  .checked-at { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 0.68rem; color: var(--ink-faint); }
   .endpoint-auth { color: var(--ink-soft); line-height: 1.4; }
   .endpoint-ms { font-family: var(--font-mono); color: var(--ink-faint); font-size: 0.78rem; }
 
@@ -1329,8 +1332,13 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   <?php $checkedAt = (int) ($results['checked_at'] ?? @filemtime($cachePath) ?: time());
         $loginsAt  = (int) ($results['logins_checked_at'] ?? 0); ?>
-  <p class="dek">Checked <strong><?= e(ct($checkedAt)) ?></strong><?= $loginsAt
-    ? ' &middot; sign-ins ' . e(ctFull($loginsAt)) : '' ?><a class="recheck" href="?recheck=1#live">Check now</a></p>
+  <?php // The timestamps moved INTO the rows — Sean, 2026-08-23: "status and
+        // signin should show a timestamp that it was checked next to the
+        // status indicator. drop the 'checked' at the top". One clock at the
+        // top spoke for eighteen rows and two different cadences; each cell
+        // now says when IT was asked, which is the only reading that is
+        // true of that cell. ?>
+  <p class="dek"><a class="recheck" href="?recheck=1#live">Check now</a></p>
 
   <?php // Hits, from lib/hitlog.php — every page on this host writes one line
         // per request into one log, so this counts the whole site rather than
@@ -1395,7 +1403,10 @@ function cell_chip(?int $sev, string $repo, array $running): string
                 <?php // The URL answering, and nothing more. A 401 is UP: the
                       // server replied. Whether anybody can get in is the next
                       // column's question. ?>
-                <div data-sort="<?= $r['ok'] ? 0 : 1 ?>"><span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'up' : 'down' ?></span></div>
+                <div data-sort="<?= $r['ok'] ? 0 : 1 ?>">
+                  <span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'up' : 'down' ?></span>
+                  <span class="checked-at"><?= e(ct($checkedAt, 'g:i a')) ?></span>
+                </div>
                 <?php if ($gated):
                   // The SCOPE's verdict, not this row's. A scope is proven once and
                   // every row using it reports that result — which is the fact worth
@@ -1407,6 +1418,10 @@ function cell_chip(?int $sev, string $repo, array $running): string
                     elseif ($lg['state'] === 'ok')     { echo '<span class="chip live" title="' . e($lg['why']) . '">live</span>'; }
                     elseif ($lg['state'] === 'failed') { echo '<span class="chip crit" title="' . e($lg['why']) . '">BROKEN</span>'; }
                     else { echo '<span class="chip partial" title="' . e($lg['why']) . '">not probed</span>'; }
+                    // Its OWN clock: sign-ins are probed every six hours, not
+                    // every sweep, so borrowing the status stamp would claim a
+                    // login was tried minutes ago when it was tried this morning.
+                    if ($loginsAt) { echo '<span class="checked-at">' . e(ct($loginsAt, 'g:i a')) . '</span>'; }
                   ?></div>
                 <?php endif; ?>
                 <div class="endpoint-ms" data-sort="<?= (int) ($r['ms'] ?? 0) ?>"><?= $r['status'] ? $r['status'] . ' &middot; ' . $r['ms'] . 'ms' : '&mdash;' ?></div>

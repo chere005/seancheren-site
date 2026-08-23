@@ -112,7 +112,22 @@ function geo_resolve_new(int $sinceSecs = 7 * 86400, int $max = 100): int
         $cache[$ip] = $bits ? implode(', ', $bits) : '-';
         $n++;
     }
-    @file_put_contents(geo_cache_path(), json_encode($cache), LOCK_EX);
-    @chmod(geo_cache_path(), 0664);
+    /**
+     * THE WRITE IS CHECKED, and the permissions self-heal.
+     *
+     * This cache is written by whoever ran the sweep. Run once over SSH it
+     * lands owned by the login; the sweep that matters runs as `web`, which
+     * could then never write it again — and with the call suppressed, that
+     * failure looked exactly like "nothing new to resolve" for ever. Same
+     * shape as the bug that stopped samples.jsonl recording. So: report the
+     * failure, and leave the file group-writable so either user can take over.
+     */
+    $path = geo_cache_path();
+    if (@file_put_contents($path, json_encode($cache), LOCK_EX) === false) {
+        error_log('geoip: cannot write ' . $path . ' — resolved ' . $n . ' addresses and threw them away');
+        return -1;
+    }
+    @chmod($path, 0664);
+    @chgrp($path, 'web');
     return $n;
 }

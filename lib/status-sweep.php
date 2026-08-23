@@ -58,4 +58,5 @@ foreach ($results as $g => $rows) {
 }
 printf("%s  %d/%d up%s%s\n", date('Y-m-d g:i:s a T'), $total - $down, $total,
        $GLOBALS['STATUS_FORCE_LOGINS'] ? '  (sign-ins probed)' : '',
-       $geoN ? "  (located $geoN new address" . ($geoN === 1 ? '' : 'es') . ')' : '');
+       $geoN < 0 ? '  (GEO CACHE NOT WRITABLE — see the error log)'
+                 : ($geoN ? "  (located $geoN new address" . ($geoN === 1 ? '' : 'es') . ')' : ''));

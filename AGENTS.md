@@ -136,10 +136,10 @@ Dark by default, themed throughout. Pill-shaped controls. Shared chrome comes fr
 
 ### Traps that have cost real time
 
-- This has already bitten here: the
-  harness looked for `'Warning:'` in pages that render `<b>Warning</b>:`, so every PHP
-  warning sailed through green for as long as that check existed. `quiet()` in
-  `tools/test.php` is the repair.
+- The baseline's break-it-first rule has already bitten here: the harness looked for
+  `'Warning:'` in pages that render `<b>Warning</b>:`, so every PHP warning sailed
+  through green for as long as that check existed. `quiet()` in `tools/test.php` is
+  the repair.
 - **Ask what happens when a write fails.** The expensive bugs here are the silent ones —
   a `store_write()` whose `false` goes nowhere, a suppressed `@file_put_contents`, a data
   dir the web user cannot write. That last one is exactly how a seeding run printed

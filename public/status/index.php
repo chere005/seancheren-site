@@ -581,6 +581,38 @@ function cell_chip(?int $sev, string $repo, array $running): string
     text-transform: uppercase; color: var(--ink-faint); padding: 8px 8px 3px;
   }
   .repo-pick-menu .pick-head:first-child { padding-top: 2px; }
+  /* The chart's own key: colour identifies a SET of platforms moving as one,
+     so it has to be spelled out per chart rather than fixed in a legend. */
+  /* ---------- usage tab ---------- */
+
+  .usage-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .usage-table th, .usage-table td { padding: 11px 18px; border-bottom: 1px solid var(--line); text-align: left; }
+  .usage-table tr:last-child td { border-bottom: none; }
+  .usage-table thead th {
+    font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 500; background: var(--surface-alt);
+  }
+  /* Counts are read down a column and compared, so they are tabular and right
+     aligned — a ragged left edge makes 9 and 1,204 look the same length. */
+  .usage-table .num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .usage-table .zero { color: var(--ink-faint); }
+  .usage-table .soft { color: var(--ink-faint); font-size: 0.78rem; }
+  .usage-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 9px; flex: none; }
+  .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
+
+  .win-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .win-tab {
+    font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--ink-faint);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px;
+  }
+  .win-tab:hover { color: var(--ink-soft); border-color: var(--ink-soft); }
+  .win-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .gk-lane { color: var(--ink-faint); font-family: var(--font-mono); font-size: 0.68rem; }
+
+  .graph-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; }
+  .gk { display: inline-flex; align-items: center; gap: 7px; font-size: 0.76rem; color: var(--ink-soft); }
+  .gk i { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+
   .graph-axis {
     display: flex; justify-content: space-between; margin-top: 4px;
     font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-faint);
@@ -623,6 +655,14 @@ function cell_chip(?int $sev, string $repo, array $running): string
 </head>
 <body>
 
+<script>
+  // 12-hour Central everywhere on this page, in one place.
+  const fmtT = (ts) => new Date(ts * 1000).toLocaleTimeString('en-US',
+    { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' });
+  const fmtF = (ts) => new Date(ts * 1000).toLocaleString('en-US',
+    { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+</script>
+
 <div class="page">
 
   <header>
@@ -646,6 +686,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
     <button class="tab-btn active" data-tab="current">Current</button>
     <button class="tab-btn" data-tab="history">History</button>
     <button class="tab-btn" data-tab="live">Live Status</button>
+    <button class="tab-btn" data-tab="usage">Usage</button>
   </div>
 
   <!-- ============================================================ CURRENT -->
@@ -778,16 +819,6 @@ function cell_chip(?int $sev, string $repo, array $running): string
         't' => (int) $x['ts'], 'u' => (int) ($x['until'] ?? $x['ts']), 's' => $x['s'] ?? [],
     ], $samples)) ?>;
     const PLATFORMS = <?= json_encode($PLATFORMS) ?>;
-    // A colour per platform. SOLID — the dashes were meant to help anyone who
-    // cannot rely on hue and instead made six lines look like static.
-    const PLAT_STYLE = {
-      web:     { c: '#5fb6ac' },
-      macos:   { c: '#f0b429' },
-      windows: { c: '#8fa3e0' },
-      ios:     { c: '#d98cc0' },
-      watchos: { c: '#9ad17a' },
-      android: { c: '#e08a5f' },
-    };
     // THE Y AXIS, top to bottom, each in the colour the legend uses for it.
     // `releasing` is above `fine` because it is not a degree of broken, and
     // `n/a` is below everything because it is not on the scale at all.
@@ -848,7 +879,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
           <?php endforeach; ?>
         </div>
       </details>
-      <span class="pane-count"><?= count($panes) ?> repos</span>
+      <span class="pane-count"><?= count($panes) ?> repo<?= count($panes) === 1 ? '' : 's' ?></span>
     </div>
 
     <?php foreach ($panes as $name => $p): ?>
@@ -863,8 +894,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
             <div class="repo-pick-menu">
               <?php foreach ($p['plats'] as $plat): ?>
                 <label>
-                  <input type="checkbox" checked data-plat="<?= e($plat) ?>">
-                  <span class="dot" data-plat-dot="<?= e($plat) ?>"></span><?= e($PLATFORMS[$plat]) ?>
+                  <input type="checkbox" checked data-plat="<?= e($plat) ?>"><?= e($PLATFORMS[$plat]) ?>
                 </label>
               <?php endforeach; ?>
             </div>
@@ -872,21 +902,45 @@ function cell_chip(?int $sev, string $repo, array $running): string
         </div>
         <svg class="statechart" viewBox="0 0 900 210" style="width:100%;height:236px"></svg>
         <div class="graph-axis"><span class="ax-from"></span><span class="ax-mid"></span><span class="ax-to"></span></div>
+        <?php // Colour means WHICH PLATFORMS TRAVEL TOGETHER, not which
+              // platform — so the chart carries its own key. Built in JS from
+              // the groupings actually drawn. ?>
+        <div class="graph-key"></div>
       </div>
     <?php endforeach; ?>
 
     <script>
-      const fmtT = (ts) => new Date(ts * 1000).toLocaleTimeString('en-US',
-        { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' });
-      const fmtF = (ts) => new Date(ts * 1000).toLocaleString('en-US',
-        { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+      /**
+       * ONE LINE PER GROUP OF PLATFORMS THAT AGREE — Sean, 2026-08-23:
+       * "overlapping lines should just be one line in a unique color... if
+       * there's just one line that changes status, that color line should
+       * shift to its new status, and the other remaining ones still have a dot
+       * of their status when the other one changed.. every event puts a dot on
+       * the graph for all platforms".
+       *
+       * Six platforms in the same state used to be six paths on one pixel row,
+       * which is a picture that says "one thing" about six. Nudging them apart
+       * only turned it into six near-identical lines saying nothing extra. So
+       * agreement is drawn as agreement: one line, one colour, and the colour
+       * identifies WHICH platforms are travelling together. When one leaves the
+       * group, the group splits — a new colour peels off to the new band while
+       * the rest keep theirs.
+       *
+       * AND EVERY EVENT DOTS EVERY PLATFORM. A change anywhere is a moment
+       * worth reading across, so at each one every group gets a dot at whatever
+       * state it is in — including the ones that did not move. Without that,
+       * "nothing else changed" and "nothing else was recorded" looked alike.
+       */
+      const GROUP_COLORS = [
+        '#5fb6ac', '#f0b429', '#8fa3e0', '#d98cc0', '#9ad17a',
+        '#e08a5f', '#c58ef0', '#6fd0d8', '#e2725b', '#b9c86a',
+      ];
 
       function drawChart(card) {
         const svg = card.querySelector('svg.statechart');
         if (!svg || !SAMPLES.length) { return; }
-        // ONE REPO, whichever this pane is for. Colour means platform and
-        // nothing else, so a line needs no legend lookup to read.
-        const repos = [card.dataset.repo];
+        const repo  = card.dataset.repo;
         const plats = [...card.querySelectorAll('.repo-pick input[data-plat]:checked')].map(i => i.dataset.plat);
 
         const W = 900, H = 210, padL = 108, padR = 18, padT = 18, padB = 22;
@@ -902,90 +956,110 @@ function cell_chip(?int $sev, string $repo, array $running): string
                  '" text-anchor="end" font-size="11" fill="' + b.color + '" opacity="0.85">' + b.label + '</text>';
         });
 
-        // A NUDGE PER PLATFORM, so lines that agree are still countable. Six
-        // platforms all Operational drew six paths on one pixel row and looked
-        // like a single line — the picture said "one thing is fine" when it
-        // meant "six things are". The offset is a fraction of the band gap, so
-        // a nudged line never reads as the band above or below it.
-        const gap = (H - padT - padB) / (BANDS.length - 1);
-        const spread = Math.min(gap * 0.34, 5.5);
-        const nudge = (i) => plats.length < 2 ? 0 : (i - (plats.length - 1) / 2) * (spread * 2 / (plats.length - 1));
+        const key = document.createElement('div');
 
-        const changes = [];
-        repos.forEach((repo) => plats.forEach((plat, pi) => {
-          const key = repo + '.' + plat;
-          const st = PLAT_STYLE[plat] || { c: '#9c978d' };
-          const dy = nudge(pi);
-          let d = '', prev = null, spanFrom = null;
-          const mine = [];
-          SAMPLES.forEach((smp) => {
-            if (!(key in smp.s)) { return; }
-            const sev = smp.s[key], xa = x(smp.t), xb = x(smp.u);
-            if (prev === null) { d += 'M ' + xa + ' ' + (y(sev) + dy); mine.push({ t: smp.t, sev, first: true }); spanFrom = smp.t; }
-            else {
-              d += ' L ' + xa + ' ' + (y(prev) + dy) + ' L ' + xa + ' ' + (y(sev) + dy);
-              if (prev !== sev) { mine.push({ t: smp.t, sev }); spanFrom = smp.t; }
-            }
-            d += ' L ' + xb + ' ' + (y(sev) + dy);
-            prev = sev;
-          });
-          if (!d) { return; }
-          // Each change carries the span it BEGAN, so the tooltip can say how
-          // long that state lasted rather than only when it started.
-          mine.forEach((m, i) => {
-            const until = i + 1 < mine.length ? mine[i + 1].t : null;
-            changes.push({ ...m, repo, plat, until });
-          });
-          out += '<path d="' + d + '" fill="none" stroke="' + st.c + '" stroke-width="2.5" opacity="0.75" ' +
-                 'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke">' +
-                 '<title>' + repo + ' — ' + PLATFORMS[plat] + '</title></path>';
+        // Only the samples that say anything about this repo's chosen platforms.
+        const mine = SAMPLES.filter(s => plats.some(p => (repo + '.' + p) in s.s));
+        if (!plats.length || !mine.length) {
+          svg.innerHTML = out;
+          card.querySelector('.ax-from').textContent = fmtT(t0);
+          card.querySelector('.ax-to').textContent = fmtT(t1);
+          card.querySelector('.ax-mid').textContent = plats.length ? 'nothing recorded' : 'no platforms selected';
+          card.querySelector('.graph-key').innerHTML = '';
+          return;
+        }
+
+        // Who is where, at each sample.
+        const at = mine.map((s) => {
+          const m = {};
+          plats.forEach(p => { const k = repo + '.' + p; if (k in s.s) { m[p] = s.s[k]; } });
+          return m;
+        });
+        // …and the same, folded into groups: state -> the platforms in it.
+        const groupsAt = at.map((m) => {
+          const g = {};
+          Object.keys(m).forEach(p => { (g[m[p]] = g[m[p]] || []).push(p); });
+          return g;
+        });
+
+        // A colour per MEMBERSHIP, assigned in order of first appearance and
+        // stable for as long as that set travels together. Two groups that
+        // happen to share a state at different times keep their own colours;
+        // the same set reappearing gets its old one back.
+        const colorOf = {}; let ci = 0;
+        const gkey = (members) => members.slice().sort().join('+');
+        groupsAt.forEach(g => Object.keys(g).sort((a, b) => a - b).forEach((sev) => {
+          const k = gkey(g[sev]);
+          if (!(k in colorOf)) { colorOf[k] = GROUP_COLORS[ci++ % GROUP_COLORS.length]; }
         }));
 
-        // One dot per (time, state); a pie when several arrived together.
-        const spots = {};
-        changes.forEach(c => { const k = c.t + '|' + c.sev; (spots[k] = spots[k] || []).push(c); });
-        Object.keys(spots).forEach((k) => {
-          const list = spots[k], t = list[0].t, sev = list[0].sev;
-          const cx = x(t), cy = y(sev), R = list.length > 1 ? 7 : 5;
-          const names = list.map(c => PLATFORMS[c.plat]);
-          // TIMESTAMPS in the tooltip — when it entered this state, and when it
-          // left, or that it is still there.
-          const spanEnd = list.map(c => c.until).every(u => u === null)
-            ? 'still ' + SEV_LABEL[sev]
-            : 'until ' + fmtF(Math.max(...list.map(c => c.until || t)));
-          const tip = names.join(', ') + '\n' + SEV_LABEL[sev] + ' from ' + fmtF(t) + '\n' + spanEnd +
-                      (list.some(c => c.first) ? '\n(first recorded)' : '');
-          if (list.length === 1) {
-            out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="' + (PLAT_STYLE[list[0].plat] || {}).c +
+        // The horizontal runs: one per group per sample.
+        groupsAt.forEach((g, i) => {
+          const xa = x(mine[i].t), xb = x(mine[i].u);
+          Object.keys(g).forEach((sevStr) => {
+            const sev = +sevStr, members = g[sevStr], c = colorOf[gkey(members)];
+            out += '<line x1="' + xa + '" y1="' + y(sev) + '" x2="' + Math.max(xb, xa + 0.5) + '" y2="' + y(sev) +
+                   '" stroke="' + c + '" stroke-width="2.6" stroke-linecap="round" vector-effect="non-scaling-stroke">' +
+                   '<title>' + members.map(p => PLATFORMS[p]).join(', ') + ' — ' + SEV_LABEL[sev] + '</title></line>';
+          });
+        });
+
+        // The vertical moves, drawn per DESTINATION group so a split shows the
+        // colour that is arriving rather than the one being left behind.
+        for (let i = 1; i < at.length; i++) {
+          const moved = {};
+          Object.keys(at[i]).forEach((p) => {
+            const from = at[i - 1][p], to = at[i][p];
+            if (from === undefined || from === to) { return; }
+            (moved[from + '>' + to] = moved[from + '>' + to] || []).push(p);
+          });
+          Object.keys(moved).forEach((mk) => {
+            const [from, to] = mk.split('>').map(Number);
+            const members = moved[mk], xa = x(mine[i].t);
+            const c = colorOf[gkey(groupsAt[i][to] || members)];
+            out += '<line x1="' + xa + '" y1="' + y(from) + '" x2="' + xa + '" y2="' + y(to) +
+                   '" stroke="' + c + '" stroke-width="2.6" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.85">' +
+                   '<title>' + members.map(p => PLATFORMS[p]).join(', ') + ': ' + SEV_LABEL[from] +
+                   ' → ' + SEV_LABEL[to] + '\n' + fmtF(mine[i].t) + '</title></line>';
+          });
+        }
+
+        // THE DOTS. Every sample boundary is an event, and every group gets one
+        // — the ones that moved and the ones that did not.
+        let events = 0;
+        groupsAt.forEach((g, i) => {
+          const anyMove = i > 0 && Object.keys(at[i]).some(p => at[i - 1][p] !== undefined && at[i - 1][p] !== at[i][p]);
+          if (i > 0 && !anyMove) { return; }
+          if (i > 0) { events++; }
+          const cx = x(mine[i].t);
+          Object.keys(g).forEach((sevStr) => {
+            const sev = +sevStr, members = g[sevStr], c = colorOf[gkey(members)];
+            const R = members.length > 1 ? 6.5 : 5;
+            const names = members.map(p => PLATFORMS[p]).join(', ');
+            const tip = names + '\n' + SEV_LABEL[sev] + ' from ' + fmtF(mine[i].t) +
+                        (i === 0 ? '\n(first recorded)' : '');
+            out += '<circle cx="' + cx + '" cy="' + y(sev) + '" r="' + R + '" fill="' + c +
                    '" stroke="var(--surface)" stroke-width="1.5"><title>' + tip + '</title></circle>';
-          } else {
-            let a0 = -Math.PI / 2;
-            const step = (Math.PI * 2) / list.length;
-            list.forEach((c) => {
-              const a1 = a0 + step;
-              const p0 = [cx + R * Math.cos(a0), cy + R * Math.sin(a0)];
-              const p1 = [cx + R * Math.cos(a1), cy + R * Math.sin(a1)];
-              out += '<path d="M ' + cx + ' ' + cy + ' L ' + p0[0] + ' ' + p0[1] + ' A ' + R + ' ' + R +
-                     ' 0 ' + (step > Math.PI ? 1 : 0) + ' 1 ' + p1[0] + ' ' + p1[1] + ' Z" fill="' +
-                     ((PLAT_STYLE[c.plat] || {}).c || '#9c978d') + '"><title>' + tip + '</title></path>';
-              a0 = a1;
-            });
-            out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="var(--surface)" stroke-width="1.5"/>';
-          }
-          if (!list.some(c => c.first) && list.length <= 2) {
-            const anchor = t > (t0 + t1) / 2 ? 'end' : 'start';
-            out += '<text x="' + (cx + (anchor === 'end' ? -10 : 10)) + '" y="' + (cy - 10) +
-                   '" fill="var(--ink-soft)" font-size="10" text-anchor="' + anchor + '">' + names.join(', ') + '</text>';
-          }
+          });
         });
 
         svg.innerHTML = out;
         card.querySelector('.ax-from').textContent = fmtT(t0);
         card.querySelector('.ax-to').textContent = fmtT(t1);
-        const n = Object.keys(spots).filter(k => !spots[k].some(c => c.first)).length;
-        card.querySelector('.ax-mid').textContent = plats.length === 0
-          ? 'no platforms selected'
-          : (n === 0 ? 'no changes' : n + (n === 1 ? ' change' : ' changes'));
+        card.querySelector('.ax-mid').textContent =
+          events === 0 ? 'no changes' : events + (events === 1 ? ' change' : ' changes');
+
+        // THE KEY, because colour no longer means platform. It lists only the
+        // groupings this chart actually drew.
+        const seen = new Set(); let keyHtml = '';
+        groupsAt.forEach(g => Object.keys(g).forEach((sev) => {
+          const k = gkey(g[sev]);
+          if (seen.has(k)) { return; }
+          seen.add(k);
+          keyHtml += '<span class="gk"><i style="background:' + colorOf[k] + '"></i>' +
+                     g[sev].map(p => PLATFORMS[p]).join(' + ') + '</span>';
+        }));
+        card.querySelector('.graph-key').innerHTML = keyHtml;
       }
 
       function drawAll() { document.querySelectorAll('.graph-card[data-graph]').forEach(drawChart); }
@@ -1001,9 +1075,6 @@ function cell_chip(?int $sev, string $repo, array $running): string
         }));
       document.querySelectorAll('.graph-card .repo-pick input[data-plat]').forEach(cb =>
         cb.addEventListener('change', () => drawChart(cb.closest('.graph-card'))));
-      document.querySelectorAll('[data-plat-dot]').forEach(d => {
-        const st = PLAT_STYLE[d.dataset.platDot]; if (st) { d.style.background = st.c; }
-      });
       drawAll();
       window.addEventListener('resize', drawAll);
     </script>
@@ -1113,6 +1184,171 @@ function cell_chip(?int $sev, string $repo, array $running): string
     <div class="legend-item"><span class="swatch crit"></span> <strong>BROKEN</strong> — up, nobody can get in</div>
     <div class="legend-item"><span class="swatch partial"></span> <strong>not probed</strong> — no credentials in <code>lib/config.php</code></div>
   </div>
+
+  </div>
+
+  <!-- ============================================================== USAGE -->
+  <div class="tab-panel" id="tab-usage">
+  <?php
+  /**
+   * WHO IS USING THIS — Sean, 2026-08-23: "separate hits from tests, hits from
+   * my usage, and hits from other peoples usage.. on a 4th tab for Usage show
+   * the name of each account, and their hits in the last hour, 12 hours, 3
+   * days, 1 month, 1 year with timeseries line chart showing their requests
+   * per minute".
+   *
+   * Everything here comes from the one host-wide hit log, so it counts every
+   * app and site on the account rather than whichever one had logging wired
+   * up. The lane split and the bucketing live in lib/hitlog.php.
+   */
+  $usage = hit_usage();
+  $uw = $usage['windows'];
+  $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'test' => 'Tests'];
+  $laneDek  = [
+      'sean'  => 'production, signed in as sean',
+      'other' => 'production, anybody else — signed in or not',
+      'test'  => 'the test.seancheren.com sandbox',
+  ];
+  ?>
+
+  <?php // HOW FAR BACK THE LOG ACTUALLY GOES. It rotates once at 4 MB and the
+        // rotated copy is dropped on the next rotation, so the year column can
+        // be reporting on a fortnight. Saying so is the difference between a
+        // quiet year and a short log. ?>
+  <p class="dek">Log starts <strong><?= $usage['oldest'] ? e(ctFull($usage['oldest'])) : '&mdash;' ?></strong><?php
+    if ($usage['oldest'] && $usage['oldest'] > $usage['from']): ?> &middot; longer windows are capped by that<?php endif; ?></p>
+
+  <div class="kpis" style="margin-bottom:6px">
+    <?php foreach ($laneName as $lk => $ln): ?>
+      <div class="kpi">
+        <span class="n"><?= number_format($usage['lanes'][$lk]['3d'] ?? 0) ?></span>
+        <span class="l"><?= e($ln) ?> &middot; last 3 days</span>
+      </div>
+    <?php endforeach; ?>
+  </div>
+
+  <?php foreach ($laneName as $lk => $ln):
+    $rows = array_filter($usage['people'], fn($p) => $p['lane'] === $lk); ?>
+    <div class="table-card">
+      <div class="group-head">
+        <h2><?= e($ln) ?></h2>
+        <p><?= e($laneDek[$lk]) ?></p>
+      </div>
+      <?php if (!$rows): ?>
+        <div class="usage-none">Nothing logged.</div>
+      <?php else: ?>
+      <div class="table-scroll">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <?php foreach ($uw as $w): ?><th class="num"><?= e($w['label']) ?></th><?php endforeach; ?>
+              <th class="num">Last seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($rows as $rk => $p): ?>
+              <tr>
+                <td><span class="usage-dot" data-key="<?= e($rk) ?>"></span><span class="repo-name"><?= e($p['name']) ?></span></td>
+                <?php foreach (array_keys($uw) as $wk): ?>
+                  <td class="num<?= $p['counts'][$wk] ? '' : ' zero' ?>"><?= number_format($p['counts'][$wk]) ?></td>
+                <?php endforeach; ?>
+                <td class="num soft"><?= e(ctFull($p['last'])) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php endif; ?>
+    </div>
+  <?php endforeach; ?>
+
+  <?php // REQUESTS PER MINUTE, one line per account. The window picker changes
+        // the bucket as well as the span, and the rate is divided back out, so
+        // the y axis means the same thing at every zoom. ?>
+  <div class="graph-card" id="usage-chart">
+    <div class="graph-head">
+      <h2>Requests per minute</h2>
+      <div class="win-tabs">
+        <?php foreach ($uw as $wk => $w): ?>
+          <button class="win-tab<?= $wk === '3d' ? ' on' : '' ?>" data-win="<?= e($wk) ?>"><?= e($w['label']) ?></button>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <svg class="usagechart" viewBox="0 0 900 210" style="width:100%;height:236px"></svg>
+    <div class="graph-axis"><span class="ax-from"></span><span class="ax-mid"></span><span class="ax-to"></span></div>
+    <div class="graph-key"></div>
+  </div>
+
+  <script>
+    const USAGE = <?= json_encode([
+        'windows' => $uw,
+        'series'  => $usage['series'],
+        'people'  => array_map(fn($p) => ['name' => $p['name'], 'lane' => $p['lane']], $usage['people']),
+        'now'     => $usage['now'],
+    ]) ?>;
+    // A colour per ACCOUNT, stable across every window so switching the span
+    // does not repaint who is who.
+    const USAGE_COLORS = ['#5fb6ac','#f0b429','#8fa3e0','#d98cc0','#9ad17a','#e08a5f','#c58ef0','#6fd0d8','#e2725b','#b9c86a'];
+    const UCOLOR = {};
+    Object.keys(USAGE.people).forEach((k, i) => { UCOLOR[k] = USAGE_COLORS[i % USAGE_COLORS.length]; });
+    document.querySelectorAll('.usage-dot').forEach(d => { d.style.background = UCOLOR[d.dataset.key] || 'var(--none)'; });
+
+    function drawUsage() {
+      const card = document.getElementById('usage-chart');
+      if (!card) { return; }
+      const svg = card.querySelector('svg.usagechart');
+      const wk  = (card.querySelector('.win-tab.on') || {}).dataset.win || '3d';
+      const w   = USAGE.windows[wk];
+      const rows = USAGE.series[wk] || {};
+      const keys = Object.keys(rows).filter(k => rows[k].some(v => v > 0));
+
+      const W = 900, H = 210, padL = 62, padR = 18, padT = 16, padB = 22;
+      const n = (rows[Object.keys(rows)[0]] || []).length || 1;
+      // The peak sets the scale, with a floor so an idle window is a flat line
+      // near the bottom rather than noise magnified to full height.
+      let peak = 0;
+      keys.forEach(k => rows[k].forEach(v => { if (v > peak) { peak = v; } }));
+      const top = Math.max(peak, 0.5);
+      const x = (i) => padL + (n === 1 ? 0 : (i / (n - 1)) * (W - padL - padR));
+      const y = (v) => padT + (1 - v / top) * (H - padT - padB);
+
+      let out = '';
+      [0, 0.5, 1].forEach((f) => {
+        const v = top * f;
+        out += '<line x1="' + padL + '" y1="' + y(v) + '" x2="' + (W - padR) + '" y2="' + y(v) +
+               '" stroke="var(--line)" stroke-width="1" opacity="0.7"/>' +
+               '<text x="' + (padL - 9) + '" y="' + (y(v) + 3.5) + '" text-anchor="end" font-size="11" ' +
+               'fill="var(--ink-faint)">' + (v >= 10 ? Math.round(v) : v.toFixed(1)) + '</text>';
+      });
+
+      keys.forEach((k) => {
+        const d = rows[k].map((v, i) => (i ? 'L' : 'M') + x(i) + ' ' + y(v)).join(' ');
+        out += '<path d="' + d + '" fill="none" stroke="' + UCOLOR[k] + '" stroke-width="2.2" ' +
+               'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.9">' +
+               '<title>' + USAGE.people[k].name + '</title></path>';
+      });
+
+      svg.innerHTML = out;
+      const from = USAGE.now - w.secs;
+      card.querySelector('.ax-from').textContent = fmtF(from);
+      card.querySelector('.ax-to').textContent = fmtF(USAGE.now);
+      card.querySelector('.ax-mid').textContent = keys.length
+        ? 'peak ' + (peak >= 10 ? Math.round(peak) : peak.toFixed(2)) + '/min · ' +
+          (w.bucket >= 86400 ? (w.bucket / 86400) + 'd' : w.bucket >= 3600 ? (w.bucket / 3600) + 'h' : (w.bucket / 60) + 'm') + ' buckets'
+        : 'no requests in this window';
+      card.querySelector('.graph-key').innerHTML = keys.map(k =>
+        '<span class="gk"><i style="background:' + UCOLOR[k] + '"></i>' + USAGE.people[k].name +
+        ' <span class="gk-lane">' + USAGE.people[k].lane + '</span></span>').join('');
+    }
+
+    document.querySelectorAll('.win-tab').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('.win-tab').forEach(o => o.classList.remove('on'));
+      b.classList.add('on');
+      drawUsage();
+    }));
+    drawUsage();
+  </script>
 
   </div>
 

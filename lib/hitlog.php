@@ -150,14 +150,137 @@ function hit_counts(array $windows): array
     return $out;
 }
 
+/**
+ * THE THREE LANES — Sean, 2026-08-23: "separate hits from tests, hits from my
+ * usage, and hits from other peoples usage".
+ *
+ * The split is made from what the log already holds, and from nothing else:
+ *
+ *   test   the sandbox instance. test.seancheren.com is where a thing is
+ *          tried before it is real, so its traffic is testing by definition.
+ *          The repo's own `php tools/test.php` never appears here at all —
+ *          it writes to a scratch data dir and never touches this file — so
+ *          this lane is server-side testing, which is the only kind that
+ *          leaves a mark.
+ *   sean   production, signed in as sean.
+ *   other  production, anybody else, INCLUDING signed out. A visitor who
+ *          never logs in is still somebody else using the site, and filing
+ *          them under "unknown" would have made the one lane that answers
+ *          "is anyone out there" the emptiest of the three.
+ */
+function hit_lane(array $row): string
+{
+    if (($row['instance'] ?? 'prod') !== 'prod') { return 'test'; }
+    return ($row['user'] ?? '-') === 'sean' ? 'sean' : 'other';
+}
+
+/**
+ * The window set the Usage tab reports, and the bucket each one draws at.
+ *
+ * A YEAR AT ONE-MINUTE RESOLUTION IS HALF A MILLION POINTS, so every window
+ * buckets to at most ~72 of them and the rate is divided back out. The y axis
+ * is always requests per MINUTE, whatever the bucket — which is what makes an
+ * hour and a year comparable at a glance instead of just differently shaped.
+ */
+function hit_windows(): array
+{
+    return [
+        'hour'  => ['label' => '1 hour',   'secs' => 3600,          'bucket' => 60],
+        '12h'   => ['label' => '12 hours', 'secs' => 12 * 3600,     'bucket' => 600],
+        '3d'    => ['label' => '3 days',   'secs' => 3 * 86400,     'bucket' => 3600],
+        'month' => ['label' => '1 month',  'secs' => 30 * 86400,    'bucket' => 12 * 3600],
+        'year'  => ['label' => '1 year',   'secs' => 365 * 86400,   'bucket' => 7 * 86400],
+    ];
+}
+
+/**
+ * Per-account usage: the counts per window, the lane each account belongs to,
+ * and a requests-per-minute series per window for the chart.
+ *
+ * ONE PASS OVER THE LOG. The windows nest, so the longest one is read once and
+ * every shorter count is taken from the same rows rather than re-reading the
+ * file five times.
+ *
+ * `oldest` is returned because it is the difference between "nobody used this
+ * last year" and "the log does not go back a year". The log rotates once at
+ * 4 MB and the rotated copy is dropped on the next rotation, so a busy month
+ * really can leave the year column reporting on a fortnight. The page says so.
+ */
+function hit_usage(): array
+{
+    $wins = hit_windows();
+    $now  = time();
+    $rows = hit_tail_since($now - max(array_column($wins, 'secs')), 8 * 1024 * 1024);
+
+    $people = [];
+    $lanes  = ['sean' => [], 'other' => [], 'test' => []];
+    $series = [];
+    foreach ($wins as $wk => $w) {
+        $lanes['sean'][$wk] = $lanes['other'][$wk] = $lanes['test'][$wk] = 0;
+    }
+
+    foreach ($rows as $r) {
+        $lane = hit_lane($r);
+        $who  = $r['user'] === '-' ? '(signed out)' : $r['user'];
+        // The same name on the sandbox and on production is two lanes of
+        // usage, not one account seen twice — so the lane is part of the key.
+        $key  = $lane . "\0" . $who;
+        if (!isset($people[$key])) {
+            $people[$key] = ['name' => $who, 'lane' => $lane, 'last' => 0, 'counts' => array_fill_keys(array_keys($wins), 0)];
+        }
+        $people[$key]['last'] = max($people[$key]['last'], $r['ts']);
+        foreach ($wins as $wk => $w) {
+            if ($r['ts'] < $now - $w['secs']) { continue; }
+            $people[$key]['counts'][$wk]++;
+            $lanes[$lane][$wk]++;
+            $b = (int) floor(($r['ts'] - ($now - $w['secs'])) / $w['bucket']);
+            $series[$wk][$key][$b] = ($series[$wk][$key][$b] ?? 0) + 1;
+        }
+    }
+
+    // Busiest first, on the shortest window that distinguishes them — an
+    // account idle this hour but heavy this year should not sort to the bottom.
+    uasort($people, function ($a, $b) use ($wins) {
+        foreach (array_keys($wins) as $wk) {
+            if ($a['counts'][$wk] !== $b['counts'][$wk]) { return $b['counts'][$wk] <=> $a['counts'][$wk]; }
+        }
+        return strcmp($a['name'], $b['name']);
+    });
+
+    // The series, as dense arrays of requests per minute — JSON with a hole in
+    // it is a hole the chart has to guess about, and a quiet bucket is a real
+    // zero, not a missing reading.
+    $out = [];
+    foreach ($wins as $wk => $w) {
+        $n = (int) ceil($w['secs'] / $w['bucket']);
+        foreach ($people as $key => $p) {
+            $line = array_fill(0, $n, 0.0);
+            foreach ($series[$wk][$key] ?? [] as $b => $c) {
+                if ($b >= 0 && $b < $n) { $line[$b] = round($c / ($w['bucket'] / 60), 4); }
+            }
+            $out[$wk][$key] = $line;
+        }
+    }
+
+    return [
+        'windows' => $wins,
+        'people'  => $people,
+        'lanes'   => $lanes,
+        'series'  => $out,
+        'from'    => $now - max(array_column($wins, 'secs')),
+        'oldest'  => $rows ? $rows[0]['ts'] : null,
+        'now'     => $now,
+    ];
+}
+
 /** Every logged hit at or after $since, oldest first. */
-function hit_tail_since(int $since): array
+function hit_tail_since(int $since, int $bytes = 1024 * 1024): array
 {
     $rows = [];
     foreach ([hit_log_path(), hit_log_path() . '.1'] as $file) {
         if (!is_file($file)) { continue; }
         $reached = false;
-        foreach (array_reverse(hit_read_tail($file)) as $line) {
+        foreach (array_reverse(hit_read_tail($file, $bytes)) as $line) {
             $f = explode("\t", rtrim($line, "\n"));
             if (count($f) < 5) { continue; }
             $ts = (int) $f[0];

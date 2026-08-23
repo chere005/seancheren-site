@@ -160,9 +160,13 @@ $WEB_PROBE = [
 // draw a line per app rather than one line per release. Sean, 2026-08-22:
 // "the linegraph should have a line for each app and its status from the
 // current tab during each ping".
+// The local fallback is the REPO's data dir. It read ../../data — a depth
+// carried over from when this code lived in public/status/ — which from lib/
+// points one level above the repo entirely, so local samples were being
+// written into a stray directory beside it.
 $samplePath = is_dir('/home/protected/status')
     ? '/home/protected/status/samples.jsonl'
-    : __DIR__ . '/../../data/status-samples.jsonl';
+    : dirname(__DIR__) . '/data/status-samples.jsonl';
 // Changes, not pings — 120 of them is a long history now rather than 90
 // minutes of it.
 const SAMPLE_KEEP = 120;

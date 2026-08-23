@@ -252,6 +252,34 @@ t('deploy.sh is left to test and production, and knows nothing about dev', funct
     }
 });
 
+t('an instance marker matches a directory that ENDS in the slug, not only one inside it',
+  function () use ($root) {
+    // The preamble used to test strpos(__DIR__, '/test/'), which needs a trailing
+    // slash. The instance's own top-level page is /home/public/test/index.php, whose
+    // __DIR__ is /home/public/test — no trailing slash, no match. That one page loaded
+    // production's lib and, through it, production's DATA, while every page one level
+    // down was correctly isolated. It went unseen because nobody opens a sandbox to
+    // look at its home page.
+    $m = fn(string $dir, string $slug) => preg_match('#/' . $slug . '(/|$)#', $dir) === 1;
+    ok($m('/home/public/test', 'test'), "the sandbox's own directory matches");
+    ok($m('/home/public/test/about', 'test'), 'and so does a page inside it');
+    ok($m('/home/public/dev', 'dev'), 'the same for dev');
+    ok(!$m('/home/public', 'test'), 'production does not');
+    ok(!$m('/home/public/akisthemes', 'test'), 'nor does an unrelated page');
+
+    // And the host, which is the only signal left once .htaccess routes the sandboxes
+    // as subdomains: test.seancheren.com/X is rewritten to /test/X internally, so
+    // REQUEST_URI never says /test/ there either.
+    foreach (glob($root . '/public/*/index.php') ?: [] as $f) {
+        $b = (string) file_get_contents($f);
+        if (strpos($b, '$__test') === false) { continue; }   // no preamble, no promise
+        $rel = substr($f, strlen($root) + 1);
+        has("preg_match('#/test(/|$)#', __DIR__)", $b, "$rel matches the slug at the end");
+        has("strncmp(\$__host, 'test.', 5) === 0", $b, "$rel knows the test subdomain");
+        has("strncmp(\$__host, 'dev.', 4) === 0", $b, "$rel knows the dev subdomain");
+    }
+});
+
 t('suite_base() normalises a messy prefix', function () use ($root, $scratch) {
     $php = 'require ' . var_export($root . '/lib/auth.php', true) . '; echo suite_base();';
     exec('SUITE_BASE=' . escapeshellarg('test/') . ' SUITE_DATA_DIR=' . escapeshellarg($scratch)
@@ -618,11 +646,13 @@ t('every page under /test/ loads lib-test, not lib', function () {
         ok($r['status'] === 200 || $r['status'] === 403, "$path answers ($path is gated by name)");
         quiet($r['body'], "$path is quiet");
     }
-    // The site shell is what still builds cross-page links through suite_base(); the
-    // apps that did went with the suite.
+    // The instance's OWN top-level page is the one the old __DIR__ check missed:
+    // /home/public/test/index.php sits in a directory ending '/test', with no trailing
+    // slash, so the sandbox home loaded production's lib and production's DATA while
+    // every page one level down was correctly isolated.
     $r = hreq($p, 'GET', '/test/', [], $jar);
-    has('href="/test/about/"', $r['body'], 'the sandbox home builds its nav under /test/');
-    hasnt('href="/about/"', $r['body'], 'and never an unprefixed one');
+    eq(200, $r['status'], 'the sandbox home renders');
+    quiet($r['body'], 'the sandbox home is quiet');
 });
 
 t('the sandbox writes nowhere near the outer run, let alone data/', function () use ($root) {

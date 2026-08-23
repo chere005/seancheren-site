@@ -5,10 +5,19 @@
 // keep a plain lib-only preamble; they carry this one since 2026-08-22, when site_nav()
 // started building its links through suite_base(). Without it a sandbox page could not
 // know its own base — and, worse, could not find a lib at all from one directory down.
-$__test   = strpos(__DIR__, '/test/') !== false
-         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0;
-$__dev    = strpos(__DIR__, '/dev/') !== false
-         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/dev/', 5) === 0;
+// THREE signals, and all three are needed. __DIR__ with a bare strpos for '/test/'
+// missed the instance's OWN top-level page — /home/public/test/index.php sits in
+// /home/public/test, with no trailing slash — so the sandbox home silently loaded
+// production's lib AND production's data. The host check is what the subdomain
+// routing needs: test.seancheren.com/X is rewritten to /test/X internally, so
+// REQUEST_URI never says /test/ there either.
+$__host   = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+$__test   = preg_match('#/test(/|$)#', __DIR__) === 1
+         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0
+         || strncmp($__host, 'test.', 5) === 0;
+$__dev    = preg_match('#/dev(/|$)#', __DIR__) === 1
+         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/dev/', 5) === 0
+         || strncmp($__host, 'dev.', 4) === 0;
 $__libDir = null;
 $__cands  = $__dev
     ? [__DIR__ . '/../../lib-dev', '/home/protected/lib-dev']

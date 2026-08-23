@@ -1,12 +1,22 @@
 <?php
 // A page served under /test/ (the sandbox mirror) loads lib-test/ instead of lib/, and one
 // served under /dev/ (a second, fixed sandbox slot) loads lib-dev/ — each mirror
-// isolated in code, config and data. Cross-app links carry the same prefix via suite_base();
-// _self_path() redirects already stay put. Keep this preamble identical when adding a page.
-$__test   = strpos(__DIR__, '/test/') !== false
-         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0;
-$__dev    = strpos(__DIR__, '/dev/') !== false
-         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/dev/', 5) === 0;
+// isolated in code, config and data. Links stay root-relative — the sandboxes are
+// subdomains and .htaccess maps test.seancheren.com/X to /test/X — so nothing here
+// prefixes a href. Keep this preamble identical when adding a page.
+// THREE signals, and all three are needed. __DIR__ with a bare strpos for '/test/'
+// missed the instance's OWN top-level page — /home/public/test/index.php sits in
+// /home/public/test, with no trailing slash — so the sandbox home silently loaded
+// production's lib AND production's data. The host check is what the subdomain
+// routing needs: test.seancheren.com/X is rewritten to /test/X internally, so
+// REQUEST_URI never says /test/ there either.
+$__host   = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+$__test   = preg_match('#/test(/|$)#', __DIR__) === 1
+         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0
+         || strncmp($__host, 'test.', 5) === 0;
+$__dev    = preg_match('#/dev(/|$)#', __DIR__) === 1
+         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/dev/', 5) === 0
+         || strncmp($__host, 'dev.', 4) === 0;
 $__libDir = null;
 $__cands  = $__dev
     ? [__DIR__ . '/../../../lib-dev', '/home/protected/lib-dev']

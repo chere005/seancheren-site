@@ -622,9 +622,10 @@ function render_login(string $area, string $error = '', string $stage = 'login',
         // individual apps keep their own names on their own pages. ?>
   <meta name="apple-mobile-web-app-title" content="CalMind">
   <?php // The site's own baked icons. These used to be the suite's, under
-        // /calmind/reminders/, and went with it. ?>
-  <link rel="apple-touch-icon" href="<?= suite_base() ?>/apple-touch-icon.png">
-  <link rel="icon" href="<?= suite_base() ?>/favicon-32.png">
+        // /calmind/reminders/, and went with it. Root-relative, not prefixed with
+        // suite_base(): the sandboxes are subdomains and rewrite /X to /test/X already. ?>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="icon" href="/favicon-32.png">
   <style>
     <?= theme_css() ?>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

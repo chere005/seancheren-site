@@ -545,7 +545,28 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .group-head h2 { margin: 0; font-size: 1rem; font-weight: 650; }
   .group-head p { margin: 4px 0 0; font-size: 0.82rem; color: var(--ink-soft); }
 
-  .graph-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+  .graph-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
+  .graph-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .repo-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* IN or OUT, said twice: the tick/cross glyph and the fill. Sean, 2026-08-23
+     — "there should be a visual indicator on each repo button in history
+     whether it's included or excluded". A pill that only changed shade left
+     you guessing which way round it was. */
+  .repo-tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 0.78rem; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px;
+    background: transparent; color: var(--ink-faint);
+    text-decoration: line-through; text-decoration-color: var(--ink-faint);
+  }
+  .repo-tab::before { content: "✕"; font-size: 0.72rem; opacity: 0.8; }
+  .repo-tab:hover { border-color: var(--ink-soft); color: var(--ink-soft); }
+  .repo-tab.on {
+    background: var(--accent-soft); border-color: var(--accent);
+    color: var(--accent); text-decoration: none; font-weight: 600;
+  }
+  .repo-tab.on::before { content: "✓"; opacity: 1; }
   .graph-head h2 { margin: 0; font-size: 0.95rem; font-weight: 650; }
   .graph-axis {
     display: flex; justify-content: space-between; margin-top: 4px;

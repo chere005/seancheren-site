@@ -1536,7 +1536,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         // the y axis means the same thing at every zoom. ?>
   <div class="graph-card" id="usage-chart">
     <div class="graph-head">
-      <h2>Requests per minute</h2>
+      <h2>Requests per bucket</h2>
       <div class="win-tabs">
         <?php foreach ($uw as $wk => $w): ?>
           <button class="win-tab<?= $wk === '3d' ? ' on' : '' ?>" data-win="<?= e($wk) ?>"><?= e($w['label']) ?></button>
@@ -1576,33 +1576,51 @@ function cell_chip(?int $sev, string $repo, array $running): string
       // near the bottom rather than noise magnified to full height.
       let peak = 0;
       keys.forEach(k => rows[k].forEach(v => { if (v > peak) { peak = v; } }));
-      const top = Math.max(peak, 0.5);
+      // Whole requests, so the axis is whole numbers — a scale topping out at
+      // 3.5 requests describes nothing that can happen.
+      const top = Math.max(peak, 1);
       const x = (i) => padL + (n === 1 ? 0 : (i / (n - 1)) * (W - padL - padR));
       const y = (v) => padT + (1 - v / top) * (H - padT - padB);
 
       let out = '';
       [0, 0.5, 1].forEach((f) => {
-        const v = top * f;
+        const v = Math.round(top * f);
         out += '<line x1="' + padL + '" y1="' + y(v) + '" x2="' + (W - padR) + '" y2="' + y(v) +
                '" stroke="var(--line)" stroke-width="1" opacity="0.7"/>' +
                '<text x="' + (padL - 9) + '" y="' + (y(v) + 3.5) + '" text-anchor="end" font-size="11" ' +
-               'fill="var(--ink-faint)">' + (v >= 10 ? Math.round(v) : v.toFixed(1)) + '</text>';
+               'fill="var(--ink-faint)">' + v + '</text>';
       });
+
+      // Declared before the lines are drawn: the per-bucket dots below read
+      // both, and a const used above its declaration is a dead-zone throw.
+      const from = USAGE.now - w.secs;
+      const bucketLabel = w.bucket >= 86400 ? (w.bucket / 86400) + 'd'
+                        : w.bucket >= 3600 ? (w.bucket / 3600) + 'h'
+                        : (w.bucket / 60) + 'm';
 
       keys.forEach((k) => {
         const d = rows[k].map((v, i) => (i ? 'L' : 'M') + x(i) + ' ' + y(v)).join(' ');
         out += '<path d="' + d + '" fill="none" stroke="' + UCOLOR[k] + '" stroke-width="2.2" ' +
                'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.9">' +
                '<title>' + USAGE.people[k].name + '</title></path>';
+        // A dot on every bucket that actually carried traffic, with its count
+        // and its clock time — the line alone cannot be read back to "how many,
+        // when", which is the whole question this chart answers.
+        rows[k].forEach((v, i) => {
+          if (!v) { return; }
+          out += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="3" fill="' + UCOLOR[k] +
+                 '"><title>' + USAGE.people[k].name + ': ' + v + ' request' + (v === 1 ? '' : 's') +
+                 '\n' + fmtF(from + i * w.bucket) + ' · ' + bucketLabel + ' bucket</title></circle>';
+        });
       });
 
       svg.innerHTML = out;
-      const from = USAGE.now - w.secs;
       card.querySelector('.ax-from').textContent = fmtF(from);
       card.querySelector('.ax-to').textContent = fmtF(USAGE.now);
+      // The bucket is named, because the number only means anything with it:
+      // "peak 6 per 5m" is a fact, "peak 6" is not.
       card.querySelector('.ax-mid').textContent = keys.length
-        ? 'peak ' + (peak >= 10 ? Math.round(peak) : peak.toFixed(2)) + '/min · ' +
-          (w.bucket >= 86400 ? (w.bucket / 86400) + 'd' : w.bucket >= 3600 ? (w.bucket / 3600) + 'h' : (w.bucket / 60) + 'm') + ' buckets'
+        ? 'peak ' + peak + ' per ' + bucketLabel + ' · ' + n + ' buckets of ' + bucketLabel
         : 'no requests in this window';
       card.querySelector('.graph-key').innerHTML = keys.map(k =>
         '<span class="gk"><i style="background:' + UCOLOR[k] + '"></i>' + USAGE.people[k].name +

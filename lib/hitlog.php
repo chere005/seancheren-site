@@ -264,16 +264,26 @@ function hit_lane(array $row): string
 /**
  * The window set the Usage tab reports, and the bucket each one draws at.
  *
- * A YEAR AT ONE-MINUTE RESOLUTION IS HALF A MILLION POINTS, so every window
- * buckets to at most ~72 of them and the rate is divided back out. The y axis
- * is always requests per MINUTE, whatever the bucket — which is what makes an
- * hour and a year comparable at a glance instead of just differently shaped.
+ * FIVE MINUTES IS THE FLOOR — Sean, 2026-08-23: "make the requests per minute
+ * actually bucketed by 5 minutes and show the requests in each 5 min bucket".
+ * A one-minute bucket over an hour was mostly zeroes with an occasional spike
+ * of 1, which is a picture of the sampling rate rather than of the traffic.
+ * Five minutes is the smallest bucket this site's volume actually fills.
+ *
+ * AND THE VALUE IS THE COUNT, not a rate. Dividing by the bucket's minutes
+ * made every number a fraction nobody could check against anything: "0.02"
+ * where the honest answer is "1 request in these five minutes". The chart
+ * plots requests PER BUCKET now, and the axis says which bucket.
+ *
+ * A year at five-minute resolution is 105,000 points, so the longer windows
+ * still widen — but every bucket is a whole multiple of five minutes, so the
+ * shape of a spike survives switching between them.
  */
 function hit_windows(): array
 {
     return [
-        'hour'  => ['label' => '1 hour',   'secs' => 3600,          'bucket' => 60],
-        '12h'   => ['label' => '12 hours', 'secs' => 12 * 3600,     'bucket' => 600],
+        'hour'  => ['label' => '1 hour',   'secs' => 3600,          'bucket' => 300],
+        '12h'   => ['label' => '12 hours', 'secs' => 12 * 3600,     'bucket' => 900],
         '3d'    => ['label' => '3 days',   'secs' => 3 * 86400,     'bucket' => 3600],
         'month' => ['label' => '1 month',  'secs' => 30 * 86400,    'bucket' => 12 * 3600],
         'year'  => ['label' => '1 year',   'secs' => 365 * 86400,   'bucket' => 7 * 86400],
@@ -342,8 +352,10 @@ function hit_usage(): array
         $n = (int) ceil($w['secs'] / $w['bucket']);
         foreach ($people as $key => $p) {
             $line = array_fill(0, $n, 0.0);
+            // The raw COUNT in the bucket — see hit_windows() on why this
+            // stopped being a per-minute rate.
             foreach ($series[$wk][$key] ?? [] as $b => $c) {
-                if ($b >= 0 && $b < $n) { $line[$b] = round($c / ($w['bucket'] / 60), 4); }
+                if ($b >= 0 && $b < $n) { $line[$b] = (int) $c; }
             }
             $out[$wk][$key] = $line;
         }

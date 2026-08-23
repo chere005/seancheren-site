@@ -37,7 +37,7 @@ cd "$(dirname "$0")"
 
 # The deploy target (SSH <USERNAME>@host) names a real login, so it's kept OUT of the repo:
 # it lives in a gitignored deploy.conf beside this script. Copy deploy.conf.sample to
-# deploy.conf and set HOST, or export SUITE_DEPLOY_HOST. See README ("Reconcile"/"Secrets").
+# deploy.conf and set HOST, or export SUITE_DEPLOY_HOST. See README ("Deploy").
 [ -f "$(dirname "$0")/deploy.conf" ] && . "$(dirname "$0")/deploy.conf"
 HOST="${HOST:-${SUITE_DEPLOY_HOST:-}}"
 if [ -z "$HOST" ]; then
@@ -54,7 +54,10 @@ for arg in "$@"; do
     -n|--dry-run)            DRY="--dry-run" ;;
     test|dev|prod|both|all|promote)  MODE="$arg" ;;
     *) echo "Unknown argument: $arg"
-       echo "Usage: ./deploy.sh [test|prod|both|promote] [--dry-run]"; exit 2 ;;
+       # Every mode the case above accepts. `all` is not obscure — tools/dtp.sh
+       # runs it on every release — and this line told anyone who mistyped that
+       # the mode its own lane uses does not exist.
+       echo "Usage: ./deploy.sh [test|dev|prod|both|all|promote] [--dry-run]"; exit 2 ;;
   esac
 done
 MODE="${MODE:-test}"      # a bare deploy is TEST-only, so prod is never hit by accident

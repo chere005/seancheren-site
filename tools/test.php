@@ -1532,7 +1532,20 @@ t('it never touches a data directory', function () use ($root) {
 t('a bare deploy is the test instance, never production', function () use ($root) {
     $s = (string) file_get_contents($root . '/deploy.sh');
     has('MODE="${MODE:-test}"', $s, 'the default mode is test');
-    foreach (['test|prod|both|promote', 'push_instance'] as $m) { has($m, $s, "deploy.sh still has $m"); }
+    has('push_instance', $s, 'deploy.sh still has push_instance');
+    // THE USAGE LINE MUST NAME EVERY MODE THE CASE ARM ACCEPTS. This used to
+    // assert the literal string 'test|prod|both|promote', which is why nobody
+    // noticed the two had drifted: the script accepted six modes and told
+    // anyone who mistyped that four existed — omitting `all`, which
+    // tools/dtp.sh runs on every release. Comparing them to each other is the
+    // check that cannot go stale the same way.
+    preg_match('/^\s*(\S+)\)\s*MODE="\$arg"/m', $s, $arm);
+    preg_match('/Usage: \.\/deploy\.sh \[([^\]]+)\]/', $s, $usage);
+    ok(!empty($arm[1]) && !empty($usage[1]), 'found both the case arm and the usage line');
+    $accepted = explode('|', $arm[1]);
+    $offered  = explode('|', $usage[1]);
+    sort($accepted); sort($offered);
+    eq($accepted, $offered, 'usage names exactly the modes the script accepts');
     // The script itself is not run here: it needs the deploy key, and a test run must
     // never be one keystroke away from touching the live site. These are text checks.
     ok(preg_match('/\bprod\)\s*$/m', $s) === 1, 'prod is its own explicit mode');

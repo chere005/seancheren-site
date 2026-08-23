@@ -33,8 +33,8 @@ this repo, with native iOS/watchOS and Android clones alongside it. It has been 
 by the **CalMind monorepo**, which has served `/calmind/` on this host since 2026-08-20 and
 carries its own accounts, its own deploy and its own native apps. The PHP suite, the two
 native codebases and the shared behaviour vectors they replayed were deleted here on
-2026-08-22. Nothing in this repo deploys to `/calmind/` any more, and both deploy scripts
-refuse to.
+2026-08-22. Nothing in this repo deploys to `/calmind/` any more, and `deploy.sh` refuses
+to — in its push and in its `promote`.
 
 ## Run & test
 
@@ -61,6 +61,7 @@ docroot; `public/.htaccess` routes them by hostname.
 
 ```sh
 ./deploy.sh            # → TEST only (the safe default)
+./deploy.sh prod       # → production only
 ./deploy.sh dev        # → DEV only
 ./deploy.sh both       # → TEST and PROD at once
 ./deploy.sh all        # → PROD, TEST and DEV

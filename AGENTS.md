@@ -47,7 +47,7 @@ php tools/mailtest.php you@example.com   # exercise lib/mail.php (disarmed while
 tools/usagelog.sh -f                     # follow the live usage log over SSH
 ```
 
-`deploy.sh` is one-way (Mac → server): it lints every PHP file first, never sends any `config.php`, never touches `/home/protected/data{,-test,-dev}/`, and never uses `--delete`. The Mac is the source of truth; if anything was hand-edited on the server, `rsync` it back down before deploying (see README).
+`deploy.sh` is one-way (Mac → server): it lints every PHP file first, never sends any `config.php`, never touches `/home/protected/data{,-test,-dev}/`, and never uses `--delete`. The Mac is the source of truth, so anything hand-edited on the server has to come back down before you deploy over it — `rsync -avz --exclude 'config.php' "$HOST:/home/public/" public/` and the same for `lib/`, reading `HOST` out of `deploy.conf` the way the script does. (This used to say "see README", which has never had such a section: the word `rsync` does not appear in that file. A pointer to a page that cannot answer is worse than no pointer.)
 
 **Three live instances share one source tree**, all deployed by that one script — `prod` → the site root; `test` (the default) → `/test/`; `dev` → `/dev/`; `both` → prod and test; `all` → all three; `promote` → copy the *live test* tree onto prod server-side. A bare `./deploy.sh` is test-only, so production is never hit by accident.
 

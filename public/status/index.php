@@ -111,6 +111,19 @@ function running_repos(?array $latest): array
     return $out;
 }
 
+/**
+ * A repo's WEB severity on one instance, measured from that instance's own
+ * probes. Returns null when the repo is not deployed there at all — which is
+ * an absence, not a failure, and must not paint a cell red.
+ */
+function web_sev_at(string $repo, string $inst, array $probeAt, array $byUrl): ?int
+{
+    $urls = $probeAt[$inst][$repo] ?? null;
+    if (!$urls) { return null; }
+    foreach ($urls as $u) { if (empty($byUrl[$u]['ok'])) { return 3; } }
+    return 0;
+}
+
 // severity: 0 = live/good, 1 = done/deliberate, 2 = partial/small issue, 3 = crit/needs attention
 function severity_chip_class(int $sev): string
 {
@@ -524,14 +537,14 @@ function cell_chip(?int $sev, string $repo, array $running): string
      gated row has a sign-in and a scope, a public one has neither and used to
      carry two columns of "n/a" to prove it. */
   .endpoint-row {
-    display: grid; grid-template-columns: 1.6fr 80px 108px 116px 150px; gap: 14px;
+    display: grid; grid-template-columns: 150px minmax(0, 1.6fr) 80px 108px 116px 132px; gap: 14px;
     padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: start; font-size: 0.85rem;
   }
   /* The public rows keep the SAME tracks and simply leave two of them empty,
      so Endpoint, Status and Response line up down the whole domain instead of
      the two subsections looking like two unrelated tables. */
-  .sec-open .endpoint-row > [data-col="2"],
-  .sec-open .endpoint-ms { grid-column: 4; }
+  .sec-open .endpoint-row > [data-col="3"],
+  .sec-open .endpoint-ms { grid-column: 5; }
   .endpoint-row:last-child { border-bottom: none; }
   .sec + .sec { margin-top: 4px; }
   .sec-head {
@@ -602,6 +615,18 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .usage-dot.out { background: var(--partial); }
   .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
 
+  .inst-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .inst-label { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.08em;
+                text-transform: uppercase; color: var(--ink-faint); margin-right: 2px; }
+  .inst-tab {
+    font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--ink-faint);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
+  }
+  .inst-tab:hover { color: var(--ink-soft); border-color: var(--ink-soft); }
+  .inst-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .web-cell { display: none; }
+  .web-cell.on { display: inline; }
+
   .win-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
   .win-tab {
     font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--ink-faint);
@@ -643,7 +668,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
      shared rule anchors to the right for the per-pane platform menus. */
   #pane-pick .repo-pick-menu { right: auto; left: 0; max-height: 62vh; overflow-y: auto; }
   .repo-pick-menu .dot { width: 10px; height: 3px; border-radius: 2px; flex: none; }
-  .endpoint-url { font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-faint); word-break: break-all; }
+  .endpoint-url { font-family: var(--font-mono); font-size: 0.76rem; color: var(--ink-faint); word-break: break-all; }
+  .scope-gate { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 0.68rem; color: var(--partial); }
   .endpoint-auth { color: var(--ink-soft); line-height: 1.4; }
   .endpoint-ms { font-family: var(--font-mono); color: var(--ink-faint); font-size: 0.78rem; }
 
@@ -694,12 +720,28 @@ function cell_chip(?int $sev, string $repo, array $running): string
   <!-- ============================================================ CURRENT -->
   <div class="tab-panel active" id="tab-current">
 
+  <?php
+  // Every probed URL's verdict, flattened, so a web cell can ask about its own
+  // instance without walking the group structure per row.
+  $byUrl = [];
+  foreach ($results as $g => $rowset) {
+      if (!is_array($rowset) || in_array($g, ['scopes', 'checked_at', 'logins_checked_at'], true)) { continue; }
+      foreach ($rowset as $u => $rr) { if (is_array($rr)) { $byUrl[$u] = $rr; } }
+  }
+  ?>
   <div class="kpis">
     <div class="kpi"><span class="n">5</span><span class="l">Mind-suite repos &middot; 2 developer &middot; 2 website</span></div>
     <div class="kpi"><span class="n">3</span><span class="l">apps syncing through a server</span></div>
     <div class="kpi"><span class="n">1</span><span class="l">app syncing local-only, via Bonjour</span></div>
     <div class="kpi"><span class="n">4 / 4</span><span class="l">apps building &amp; running on Android</span></div>
     <div class="kpi"><span class="n">3 / 3</span><span class="l">phone slots spent (free-tier cap)</span></div>
+  </div>
+
+  <div class="inst-pick">
+    <span class="inst-label">Web / server</span>
+    <?php foreach ($WEB_INSTANCES as $inst => $host): ?>
+      <button class="inst-tab<?= $inst === 'prod' ? ' on' : '' ?>" data-inst="<?= e($inst) ?>"><?= e($host) ?></button>
+    <?php endforeach; ?>
   </div>
 
   <?php
@@ -736,9 +778,22 @@ function cell_chip(?int $sev, string $repo, array $running): string
                   : e($r['tag']) ?></span>
               </td>
               <?php // Web leads, then the prose, then the five device columns —
-                    // the same order the matrix stores them in. ?>
-              <?php $cell = $r['plat']['web']; ?>
-              <td><span class="chip <?= cell_chip($cell[0], $r['name'], $RUNNING) ?>"><?= $cell[1] ?></span></td>
+                    // the same order the matrix stores them in.
+                    //
+                    // ONE CELL PER INSTANCE, all rendered, one shown. Sean,
+                    // 2026-08-23: "current should have a dropdown to pick from
+                    // looking at prod, test, or dev statuses". Every instance's
+                    // verdict is already in $results, so switching is a class
+                    // toggle rather than a round trip — and the live poller
+                    // keeps updating the hidden ones too. ?>
+              <td><?php foreach ($WEB_INSTANCES as $inst => $host):
+                    $sev   = web_sev_at($r['name'], $inst, $WEB_PROBE_AT, $byUrl);
+                    $label = $WEB_LABEL_AT[$inst][$r['name']] ?? null; ?>
+                <span class="web-cell" data-inst="<?= e($inst) ?>"><?php
+                  if ($label === null) { echo '<span class="chip none">not deployed</span>'; }
+                  else { echo '<span class="chip ' . cell_chip($sev, $r['name'], $RUNNING) . '">' . $label . '</span>'; }
+                ?></span>
+              <?php endforeach; ?></td>
               <td class="prose"><?= $r['sync'] ?></td>
               <?php foreach (['macos', 'windows', 'ios', 'watchos', 'android'] as $plat):
                 $c = $r['plat'][$plat] ?? [null, '&mdash;']; ?>
@@ -833,6 +888,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
       { sev: -1, label: 'n/a',              color: 'var(--none)' },
     ];
     const BAND_AT = {}; BANDS.forEach((b, i) => { BAND_AT[b.sev] = i; });
+    // Short names, because an annotation at every event has to fit beside its
+    // dot rather than beside the next one along.
+    const PLAT_SHORT = { web: 'Web', macos: 'Mac', windows: 'Win', ios: 'iOS', watchos: 'Watch', android: 'Andr' };
     const SEV_LABEL = {}; BANDS.forEach(b => { SEV_LABEL[b.sev] = b.label; });
   </script>
 
@@ -1066,6 +1124,22 @@ function cell_chip(?int $sev, string $repo, array $running): string
                         (i === 0 ? '\n(first recorded)' : '');
             out += '<circle cx="' + cx + '" cy="' + y(sev) + '" r="' + R + '" fill="' + c +
                    '" stroke="var(--surface)" stroke-width="1.5"><title>' + tip + '</title></circle>';
+
+            // ANNOTATE EACH EVENT — Sean, 2026-08-23. A dot with a tooltip
+            // only tells you what it is once you go looking; a chart read at a
+            // glance should already say which platforms moved where. Labels go
+            // on CHANGES and on the first reading, not on every routine check,
+            // or a quiet week would be a wall of repeated text.
+            if (anyMove || i === 0) {
+              const short = members.map(p => PLAT_SHORT[p] || PLATFORMS[p]).join(', ');
+              // Away from the edges, and above the dot unless that is the top
+              // band, where there is no room.
+              const near = cx > (padL + (W - padR)) / 2;
+              const above = BAND_AT[sev] > 0;
+              out += '<text x="' + (cx + (near ? -9 : 9)) + '" y="' + (y(sev) + (above ? -9 : 15)) +
+                     '" text-anchor="' + (near ? 'end' : 'start') + '" font-size="9.5" ' +
+                     'fill="var(--ink-soft)">' + short + '</text>';
+            }
           });
         });
 
@@ -1161,15 +1235,20 @@ function cell_chip(?int $sev, string $repo, array $running): string
           <div class="sec<?= $gated ? '' : ' sec-open' ?>">
             <div class="sec-head"><?= e($secName) ?></div>
             <div class="endpoint-row endpoint-head" data-sortable>
-              <div data-col="0">Endpoint</div><div data-col="1">Status</div>
-              <?php if ($gated): ?><div data-col="2">Sign-in</div><?php endif; ?>
-              <div data-col="<?= $gated ? 3 : 2 ?>">Response</div>
-              <?php if ($gated): ?><div data-col="4">Scope</div><?php endif; ?>
+              <div data-col="0">Endpoint</div><div data-col="1">URL</div><div data-col="2">Status</div>
+              <?php if ($gated): ?><div data-col="3">Sign-in</div><?php endif; ?>
+              <div data-col="<?= $gated ? 4 : 3 ?>">Response</div>
+              <?php if ($gated): ?><div data-col="5">Auth by</div><?php endif; ?>
             </div>
             <div class="domain-rows">
             <?php foreach ($secList as $ep): $r = $results[$key][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
               <div class="endpoint-row" data-live="ep:<?= e($ep['url']) ?>" title="checked <?= e(ct($checkedAt)) ?>">
-                <div data-sort="<?= e($ep['label']) ?>"><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
+                <?php // The URL is its own column now. Tucked under the label it
+                      // made every row two lines tall and could not be sorted or
+                      // scanned down, which is the only way anybody reads a URL
+                      // list. ?>
+                <div data-sort="<?= e($ep['label']) ?>"><?= e($ep['label']) ?></div>
+                <div class="endpoint-url" data-sort="<?= e($ep['url']) ?>"><?= e($ep['url']) ?></div>
                 <?php // The URL answering, and nothing more. A 401 is UP: the
                       // server replied. Whether anybody can get in is the next
                       // column's question. ?>
@@ -1192,7 +1271,14 @@ function cell_chip(?int $sev, string $repo, array $running): string
                   <?php // The mechanism rides as a tooltip. It was its own prose
                         // column, which duplicated the chip beside it on every
                         // site row and only said anything new on the API ones. ?>
-                  <div data-sort="<?= e($ep['scope_key'] ?? 'public') ?>"><span class="scope-chip" title="<?= e(strip_tags($ep['auth'] ?? '')) ?>"><?= $ep['scope'] ?? 'unknown' ?></span></div>
+                  <?php // WHO answers the password, then WHO is let through.
+                        // Two facts, two lines — running them together as
+                        // "site login &middot; aki only" read as one label and
+                        // named no owner at all. ?>
+                  <div data-sort="<?= e($ep['scope_key'] ?? 'public') ?>">
+                    <span class="scope-chip" title="<?= e(strip_tags($ep['auth'] ?? '')) ?>"><?= e(scope_provider($ep['scope_key'] ?? '') ?? 'unknown') ?></span>
+                    <?php if (!empty($ep['gate'])): ?><span class="scope-gate"><?= e($ep['gate']) ?></span><?php endif; ?>
+                  </div>
                 <?php endif; ?>
               </div>
             <?php endforeach; ?>
@@ -1384,6 +1470,16 @@ function cell_chip(?int $sev, string $repo, array $running): string
   // was impossible. The hash carries it — which also makes a tab linkable,
   // and means the restore happens before first paint rather than as a visible
   // flick from Current to wherever you were.
+  // WHICH INSTANCE the Web / server column is talking about. Every instance's
+  // cell is in the DOM; this decides which one is visible.
+  function showInstance(inst) {
+    document.querySelectorAll('.inst-tab').forEach(b => b.classList.toggle('on', b.dataset.inst === inst));
+    document.querySelectorAll('.web-cell').forEach(c => c.classList.toggle('on', c.dataset.inst === inst));
+  }
+  document.querySelectorAll('.inst-tab').forEach(b =>
+    b.addEventListener('click', () => showInstance(b.dataset.inst)));
+  showInstance('prod');
+
   function showTab(name) {
     const panel = document.getElementById('tab-' + name);
     if (!panel) { return false; }
@@ -1451,6 +1547,10 @@ function cell_chip(?int $sev, string $repo, array $running): string
       // this the dot stays green over a red table.
       if (here.className !== fresh.className) { here.className = fresh.className; }
     });
+    // The rows are replaced wholesale, so the chosen instance has to be
+    // re-applied — without this the Web / server column blanks on every poll.
+    const inst = document.querySelector('.inst-tab.on');
+    if (inst) { showInstance(inst.dataset.inst); }
     // The dek appears and disappears; it is a whole element, not a swap.
     const freshDek = doc.querySelector('header .dek');
     const hereDek = document.querySelector('header .dek');

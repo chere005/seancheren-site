@@ -123,6 +123,32 @@ function hit_log(?string $app = null, ?string $user = null): void
 
     $who = $user;
     if ($who === null && function_exists('current_user')) { $who = current_user(); }
+    /**
+     * A SIGNED-IN VISITOR ON A PUBLIC PAGE IS STILL THAT PERSON.
+     *
+     * Sean, 2026-08-23: "i want to see actual usernames, not (signed out)".
+     * current_user() reads $_SESSION, and a public page never starts a session
+     * — so every visit Sean made to the home page, Chat or the tarot logged as
+     * anonymous, and the Usage tab filed his own browsing under "other
+     * people". The name was known; nobody had opened the envelope.
+     *
+     * READ AND CLOSE, and only when a session cookie is actually present: this
+     * must not create a session for a genuine stranger, must not hold a lock
+     * across the rest of the request, and must not slow a page that has no
+     * session to read. session_boot() is what knows this instance's cookie
+     * name — the whole point of which is that production and the sandbox do
+     * not share one.
+     */
+    if ($who === null && session_status() === PHP_SESSION_NONE && function_exists('session_boot')) {
+        $name = function_exists('session_cookie_name') && function_exists('app_config')
+            ? (session_cookie_name(app_config()) ?? session_name())
+            : session_name();
+        if (!empty($_COOKIE[$name])) {
+            session_boot();
+            $who = function_exists('current_user') ? current_user() : null;
+            session_write_close();
+        }
+    }
     $clean = fn($v) => substr(preg_replace('/[^A-Za-z0-9._@-]/', '_', (string) $v), 0, 32) ?: '-';
 
     $file = hit_log_path();

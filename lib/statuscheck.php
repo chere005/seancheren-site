@@ -145,15 +145,55 @@ $repos = [
    ]],
 ];
 
-/** Which live endpoints decide a repo's WEB severity — the one row of the
- *  matrix that is measured rather than recorded. */
-$WEB_PROBE = [
-    'CalMind'         => ['https://seancheren.com/CalMind/', 'https://seancheren.com/CalMind/api/index.php'],
-    'ChefMind'        => ['https://seancheren.com/ChefMind/'],
-    'AcctMind'        => ['https://seancheren.com/AcctMind/'],
-    'seancheren-site' => ['https://seancheren.com/'],
-    'aki-tarot'       => ['https://seancheren.com/akitarot/'],
+/**
+ * WHICH LIVE ENDPOINTS DECIDE A REPO'S WEB SEVERITY — the one row of the matrix
+ * that is measured rather than recorded, now PER INSTANCE.
+ *
+ * Sean, 2026-08-23: "current should have a dropdown to pick from looking at
+ * prod, test, or dev statuses". A repo does not have one web status; it has one
+ * per place it is deployed, and the Current tab was quietly only ever showing
+ * production's.
+ *
+ * THERE IS NO dev. `/dev/` and `dev.seancheren.com` were retired on 2026-08-23
+ * at Sean's own instruction ("shouldn't even exist anymore") and both answer
+ * 404. The picker is built from this table, so dev reappears the day something
+ * is actually deployed there and not before — a chooser offering a place that
+ * does not exist is worse than one that does not offer it.
+ *
+ * A repo absent from an instance is not a failure, it is an absence: the cell
+ * says "not deployed" and the sample records n/a rather than a zero.
+ */
+$WEB_INSTANCES = ['prod' => 'seancheren.com', 'test' => 'test.seancheren.com'];
+$WEB_PROBE_AT = [
+    'prod' => [
+        'CalMind'         => ['https://seancheren.com/CalMind/', 'https://seancheren.com/CalMind/api/index.php'],
+        'ChefMind'        => ['https://seancheren.com/ChefMind/'],
+        'AcctMind'        => ['https://seancheren.com/AcctMind/'],
+        'seancheren-site' => ['https://seancheren.com/'],
+        'aki-tarot'       => ['https://seancheren.com/akitarot/'],
+    ],
+    'test' => [
+        'CalMind'         => ['https://test.seancheren.com/CalMind/'],
+        'ChefMind'        => ['https://test.seancheren.com/ChefMind/'],
+        'AcctMind'        => ['https://test.seancheren.com/AcctMind/'],
+        'seancheren-site' => ['https://test.seancheren.com/'],
+    ],
 ];
+// The label a web cell shows for each repo on each instance.
+$WEB_LABEL_AT = [
+    'prod' => [
+        'CalMind' => 'seancheren.com/CalMind', 'ChefMind' => 'seancheren.com/ChefMind',
+        'AcctMind' => 'seancheren.com/AcctMind', 'seancheren-site' => 'seancheren.com',
+        'aki-tarot' => 'seancheren.com/akitarot',
+    ],
+    'test' => [
+        'CalMind' => 'test.&#8203;seancheren.com/CalMind', 'ChefMind' => 'test.&#8203;seancheren.com/ChefMind',
+        'AcctMind' => 'test.&#8203;seancheren.com/AcctMind', 'seancheren-site' => 'test.&#8203;seancheren.com',
+    ],
+];
+// Production stays the default everywhere else in this file, so nothing that
+// asks for "the" web status silently starts answering about the sandbox.
+$WEB_PROBE = $WEB_PROBE_AT['prod'];
 
 // ------------------------------------------------------------- status samples
 // One row per PING — a fresh reachability sweep — so the History graph can
@@ -443,6 +483,25 @@ function probe_http(string $url, string $method, array $headers, ?string $body):
  * scope is used" — rows sharing a scope share its fate, which is exactly the
  * fact worth seeing (ChefMind goes down when CalMind's accounts do).
  */
+/**
+ * WHICH APP PROVIDES THE SIGN-IN — Sean, 2026-08-23: the scope column "should
+ * specify what the login scope is (which app provides authentication)".
+ *
+ * "site login" named a shape, not an owner, so a row could not tell you whose
+ * account store would refuse you. It matters: ChefMind has no accounts and
+ * goes down exactly when CalMind's do, and AcctMind has none either and rides
+ * the site's.
+ *
+ * SEAN IS RIGHT THAT THIS SHOULD BE ONE THING. There are two providers here
+ * because the suite grew two: CalMind's API for the apps, seancheren-site's
+ * form for the site. Core provides no authentication at all today. Naming the
+ * provider per row is what makes the split visible rather than implied.
+ */
+function scope_provider(string $key): ?string
+{
+    return ['calmind' => 'CalMind', 'site' => 'seancheren-site'][$key] ?? null;
+}
+
 function auth_scopes(): array
 {
     return [
@@ -498,41 +557,40 @@ $endpoints = [
     'mindsuite' => [
         'seancheren.com' => [
             ['label' => 'CalMind',    'app' => 'CalMind',  'url' => 'https://seancheren.com/CalMind/',
-             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Bearer token or passkey"],
+             'scope_key' => 'calmind', 'auth' => "Bearer token or passkey"],
             ['label' => 'CalMind API', 'app' => 'CalMind', 'url' => 'https://seancheren.com/CalMind/api/index.php',
-             'scope' => 'CalMind', 'scope_key' => 'calmind',
+             'scope_key' => 'calmind',
              'post' => '{"action":"spaces"}',
              'auth' => "Bearer token; the <code>spaces</code> action answers without one"],
             ['label' => 'ChefMind',   'app' => 'ChefMind', 'url' => 'https://seancheren.com/ChefMind/',
-             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Same users and tokens as CalMind"],
+             'scope_key' => 'calmind', 'auth' => "Same users and tokens as CalMind"],
             ['label' => 'AcctMind',   'app' => 'AcctMind', 'url' => 'https://seancheren.com/AcctMind/',
-             'scope' => 'site login', 'scope_key' => 'site',
-             'auth' => "Site login, reused"],
+             'scope_key' => 'site', 'auth' => "Site login, reused"],
         ],
         'test.seancheren.com' => [
             ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://test.seancheren.com/CalMind/',
-             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Bearer token"],
+             'scope_key' => 'calmind', 'auth' => "Bearer token"],
             ['label' => 'AcctMind', 'app' => 'AcctMind', 'url' => 'https://test.seancheren.com/AcctMind/',
-             'scope' => 'site login', 'scope_key' => 'site', 'auth' => "Its own account store"],
+             'scope_key' => 'site', 'auth' => "Its own account store"],
         ],
     ],
     'site' => [
         'seancheren.com' => [
-            ['label' => 'Home',            'app' => 'site', 'url' => 'https://seancheren.com/', 'scope' => 'public', 'scope_key' => 'public',              'auth' => 'Public — no login'],
-            ['label' => 'About',           'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/about/',        'auth' => 'Public — no login'],
-            ['label' => 'Contact',         'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/contact/',      'auth' => 'Public — no login'],
-            ['label' => 'Projects',        'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/projects/',     'auth' => 'Public — no login'],
-            ['label' => 'Theme picker',    'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public'],
-            ['label' => 'Chat',            'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public'],
-            ["label" => "Aki's Bookshelf", 'app' => 'site', 'scope' => 'site login &middot; aki only', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisbookshelf/',
+            ['label' => 'Home',            'app' => 'site', 'url' => 'https://seancheren.com/', 'scope_key' => 'public',              'auth' => 'Public — no login'],
+            ['label' => 'About',           'app' => 'site', 'scope_key' => 'public', 'url' => 'https://seancheren.com/about/',        'auth' => 'Public — no login'],
+            ['label' => 'Contact',         'app' => 'site', 'scope_key' => 'public', 'url' => 'https://seancheren.com/contact/',      'auth' => 'Public — no login'],
+            ['label' => 'Projects',        'app' => 'site', 'scope_key' => 'public', 'url' => 'https://seancheren.com/projects/',     'auth' => 'Public — no login'],
+            ['label' => 'Theme picker',    'app' => 'site', 'scope_key' => 'public', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public'],
+            ['label' => 'Chat',            'app' => 'site', 'scope_key' => 'public', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public'],
+            ["label" => "Aki's Bookshelf", 'app' => 'site', 'scope_key' => 'site', 'gate' => 'aki only', 'url' => 'https://seancheren.com/akisbookshelf/',
              'auth' => "Site login, then aki only"],
-            ['label' => 'Themes bench',    'app' => 'site', 'scope' => 'site login', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Any signed-in account'],
-            ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/', 'scope' => 'site login &middot; sean only', 'scope_key' => 'site',       'auth' => "Site login, then sean only"],
-            ['label' => "Aki's Tarot",     'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/akitarot/',     'auth' => 'Public — no login'],
+            ['label' => 'Themes bench',    'app' => 'site', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Any signed-in account'],
+            ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/', 'scope_key' => 'site', 'gate' => 'sean only', 'auth' => "Site login, then sean only"],
+            ['label' => "Aki's Tarot",     'app' => 'site', 'scope_key' => 'public', 'url' => 'https://seancheren.com/akitarot/',     'auth' => 'Public — no login'],
         ],
         'test.seancheren.com' => [
-            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope' => 'public', 'scope_key' => 'public',       'auth' => 'Public'],
-            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope' => 'site login &middot; sean only', 'scope_key' => 'site', 'auth' => "Its own account store, then sean only"],
+            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope_key' => 'public',       'auth' => 'Public'],
+            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope_key' => 'site', 'gate' => 'sean only', 'auth' => "Its own account store, then sean only"],
         ],
     ],
 ];

@@ -48,7 +48,11 @@ $accounts = accounts_load($cfg);
 $made = [];
 foreach (SEED as $user => $pass) {
     if (isset($accounts[$user]) && !$force) { continue; }
-    $accounts[$user] = ['email' => $user . '@seancheren.com', 'password' => $pass, 'created' => time()];
+    // HASHED, like the signup path and every other writer. A seeder that
+    // wrote plaintext was the one remaining way to put a readable password
+    // back into a data dir after the whole store had been migrated off them.
+    $accounts[$user] = ['email' => $user . '@seancheren.com',
+                        'password' => password_hash($pass, PASSWORD_DEFAULT), 'created' => time()];
     $made[] = $user;
 }
 if (!$made) {

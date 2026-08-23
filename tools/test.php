@@ -788,29 +788,30 @@ t('a changed password takes effect and the old one stops working', function () {
        'the new one works');
 });
 
-t('a legacy PLAINTEXT password still logs in, and is hashed on the way through', function () use ($scratch) {
-    // The upgrade path, and the reason the old shape is still accepted at all:
-    // every account on the live server was stored as typed until 2026-08-20, and
-    // refusing them outright would have locked everyone out at once. So a stored
-    // plaintext is compared in constant time, and the moment it matches — the one
-    // moment the real password is in hand and known to be right — it is rewritten
-    // as a hash. No reset email, nothing for anyone to do.
+t('a PLAINTEXT password on disk authenticates nobody', function () use ($scratch) {
+    // The migration is over. Every store on the server was converted and
+    // verified on 2026-08-23, and Sean asked for exactly this: "are all auth
+    // for all app capable of only dealing with hashed passwords from now on?"
+    //
+    // The old code accepted a stored plaintext and upgraded it on the way
+    // through, which was right while real accounts were still in that shape
+    // and wrong the moment none were: it left one hand-edited config line able
+    // to silently re-open plaintext logins for ever. A value that is not a
+    // hash now fails, loudly and safely, even when it is the right password.
     ensure_account('legacy', 'legacypassword');
     $file = $scratch . '/passwords.json';
     $pw = store_read($file);
     $pw['legacy'] = 'legacypassword';          // exactly what the old code wrote
     store_write($file, $pw);
-    ok(store_read($file)['legacy'] === 'legacypassword', 'the legacy shape is on disk');
 
-    $jar = login('legacy', 'legacypassword');  // throws unless it redirects
-    ok($jar !== [], 'the old password still works');
+    [$ok, ] = auth_password_check('legacypassword', 'legacypassword');
+    ok(!$ok, 'the right password against a plaintext store still fails');
+    [$ok2, ] = auth_password_check(password_hash('legacypassword', PASSWORD_DEFAULT), 'legacypassword');
+    ok($ok2, 'and the same password against a hash succeeds');
 
-    $after = (string) store_read($file)['legacy'];
-    ok($after !== 'legacypassword', 'and the plaintext is gone from disk');
-    ok(password_verify('legacypassword', $after), 'replaced by a hash of it');
-
-    // …and the upgraded hash is what the NEXT login checks against.
-    ok(login('legacy', 'legacypassword') !== [], 'the account still opens afterwards');
+    // Nothing rewrote the file behind our back: a rejected login is not an
+    // upgrade path, and must not look like one.
+    ok(store_read($file)['legacy'] === 'legacypassword', 'the bad value is left alone, not silently fixed');
 });
 
 t('a stored password wins over the account record it overrides', function () use ($scratch) {
@@ -1364,6 +1365,26 @@ t('a page view writes one line, and it holds no address and no path', function (
     hasnt('/projects/', $b, 'no path — the app name only');
     has("\tabout\t", $b, 'the app is the first path segment');
     has("\tprojects\t", $b, 'and nothing below it');
+});
+
+t('a signed-in visitor is named even on a page with no login', function () {
+    // Sean, 2026-08-23: "i want to see actual usernames, not (signed out)".
+    // Public pages never start a session, so current_user() saw nothing and
+    // every visit by a signed-in person was logged as anonymous — which put
+    // Sean's own browsing in the "other people" lane on the Usage tab.
+    $log = datadir() . '/hits.log';
+    @unlink($log);
+    $jar = login('example', 'examplepassword');
+    req('GET', '/about/', [], $jar);              // a page with NO login of its own
+    $b = (string) @file_get_contents($log);
+    has("\texample\t", $b, 'the public page names the signed-in visitor');
+
+    // …and a genuine stranger is still anonymous. Reading the session must not
+    // invent one.
+    @unlink($log);
+    $none = null;
+    req('GET', '/about/', [], $none);
+    has("\tGET\t-\t", (string) @file_get_contents($log), 'no session, no name');
 });
 
 t('the status page does not count its own probes', function () {

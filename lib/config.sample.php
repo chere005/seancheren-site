@@ -9,7 +9,9 @@
 
 return [
     // --- Logins for the gated areas. Each user gets separate reminder data. ---
-    // Plain-text on purpose: easy to update later. Format: 'username' => 'password'.
+    // BCRYPT HASHES ONLY — a plaintext value here authenticates nobody.
+    // Make one with:  php -r "echo password_hash('the password', PASSWORD_DEFAULT), PHP_EOL;"
+    // Format: 'username' => '$2y$...'.
     'users' => [
         'admin' => 'changeme',
     ],

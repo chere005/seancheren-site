@@ -151,22 +151,28 @@ function auth_password_for(array $cfg, string $user): ?string
  * and not hashing: anyone reading the data dir read everyone's passwords, and
  * password reuse made that everyone else's problem too.
  *
- * Both shapes are accepted on the way in, because the alternative is locking
- * every existing account out at once. A stored value that password_get_info()
- * can name is a real hash and gets password_verify(); anything else is a
- * legacy plaintext, compared in constant time and reported as needing an
- * upgrade. The caller rewrites it — see the login path.
+ * HASHES ONLY, as of 2026-08-23. Both shapes used to be accepted, because the
+ * alternative on the day of the migration was locking every existing account
+ * out at once. That transition is over: every store on the server has been
+ * migrated and verified, the signup path has always hashed before storing, and
+ * the seeder now does too. Sean: "blow away all plaintext passwords... are all
+ * auth for all app capable of only dealing with hashed passwords from now on?"
+ *
+ * Leaving the legacy branch in would have meant a single hand-edited config
+ * line could quietly re-open plaintext logins for ever, with nothing failing
+ * to say so. Now a value that is not a hash cannot authenticate anybody — a
+ * loud, safe failure rather than a silent, unsafe success.
  */
 function auth_password_check(string $want, string $given): array
 {
     if ($want === '' || $given === '') {
         return [false, false];
     }
-    if ((password_get_info($want)['algo'] ?? null)) {
-        return [password_verify($given, $want), password_needs_rehash($want, PASSWORD_DEFAULT)];
+    if (!(password_get_info($want)['algo'] ?? null)) {
+        // Not a hash: nothing can match it.
+        return [false, false];
     }
-    // LEGACY: the stored value IS the password.
-    return [hash_equals($want, $given), true];
+    return [password_verify($given, $want), password_needs_rehash($want, PASSWORD_DEFAULT)];
 }
 
 /**

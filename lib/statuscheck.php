@@ -42,7 +42,7 @@ $PLATFORMS = [
 // then MindSuite (not Mind-Suite), then developer".
 $REPO_GROUPS = [
     'website'   => ['Website', 'Served from the seancheren.com account.'],
-    'mindsuite' => ['MindSuite', 'Five repos and the apps they ship.'],
+    'mindsuite' => ['MindSuite', 'Six repos and the apps they ship.'],
     'developer' => ['Developer', 'Tooling. Nothing ships to a device.'],
 ];
 
@@ -70,6 +70,20 @@ $REPO_GROUPS = [
  * MyCalMind's Catalyst build is real and is written where somebody can act on
  * it — CoreMind's AGENTS.md — not in a cell that has to be read forty times.
  */
+/**
+ * BUILT THIS RELEASE, NOT INSTALLED — Sean, 2026-08-23: "if verified is what
+ * you mean by that, then it should be a lighter green to indicate it's built,
+ * but didn't actually get installed".
+ *
+ * It sits between Operational and Build Only because it is neither: the code
+ * compiled as part of a real release, so it is better than "builds"; but the
+ * copy on the device is from an earlier day, so it is not "verified" and a
+ * green chip claiming it was is the page telling a comfortable lie. The note
+ * carries the date the DEVICE was last actually written to, which is the
+ * number that has stopped moving.
+ */
+const SEV_BUILT = 5;
+
 $repos = [
   ['name' => 'CalMind', 'group' => 'mindsuite', 'tag' => 'origin app',
    'sync' => '<code>seancheren.com/CalMind/api/index.php</code><br><code>records</code> space',
@@ -77,8 +91,8 @@ $repos = [
      'web'     => [0, 'seancheren.com/CalMind'],
      'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/CalMind.app</span><br>Tauri &middot; Aug 22, 4:23 pm'],
      'windows' => [0, 'CI build', 'GitHub Actions<br>Aug 23, 4:15 am'],
-     'ios'     => [0, 'verified', 'iPhoooooone<br>Aug 22'],
-     'watchos' => [0, 'verified', 'paired Apple Watch<br>Aug 22'],
+     'ios'     => [SEV_BUILT, 'built, not installed', 'iPhoooooone carries Aug 22'],
+     'watchos' => [SEV_BUILT, 'built, not installed', 'paired watch carries Aug 22'],
      'android' => [0, 'verified', 'local emulator<br>Aug 22'],
    ]],
   ['name' => 'ChefMind', 'group' => 'mindsuite', 'tag' => 'split from CalMind',
@@ -87,7 +101,7 @@ $repos = [
      'web'     => [0, 'seancheren.com/ChefMind'],
      'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/ChefMind.app</span><br>Tauri &middot; Aug 23, 12:46 am'],
      'windows' => [0, 'CI build', 'GitHub Actions<br>Aug 23, 4:15 am'],
-     'ios'     => [0, 'verified', 'iPhoooooone<br>Aug 22'],
+     'ios'     => [SEV_BUILT, 'built, not installed', 'iPhoooooone carries Aug 22'],
      'watchos' => [null, '&mdash;'],
      'android' => [0, 'verified', 'local emulator<br>Aug 22'],
    ]],
@@ -97,7 +111,7 @@ $repos = [
      'web'     => [0, 'seancheren.com/AcctMind'],
      'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/AcctMind.app</span><br>Tauri &middot; Aug 22, 4:25 pm'],
      'windows' => [0, 'CI build', 'GitHub Actions<br>Aug 23, 4:15 am'],
-     'ios'     => [0, 'verified', 'iPhoooooone<br>Aug 22'],
+     'ios'     => [SEV_BUILT, 'built, not installed', 'iPhoooooone carries Aug 22'],
      'watchos' => [null, '&mdash;'],
      'android' => [0, 'verified', 'local emulator<br>Aug 22'],
    ]],
@@ -261,6 +275,7 @@ const SEV_RUNNING = 4;
  * good-to-bad run: not a score, the absence of one.
  */
 const SEV_NA = -1;
+
 
 /**
  * The most recent run, and which repos it is touching.

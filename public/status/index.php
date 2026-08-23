@@ -134,6 +134,7 @@ function severity_chip_class(int $sev): string
 {
     return match ($sev) {
         0 => 'live',
+        5 => 'built',
         1 => 'done',
         2 => 'partial',
         default => 'crit',
@@ -253,6 +254,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
     --live: #1f8a4c;
     --live-bg: #e4f5ea;
+    --built: #5f9e78;
+    --built-bg: #e9f4ed;
     --done: #2c6fd1;
     --done-bg: #e6eefb;
     --partial: #a86a15;
@@ -285,6 +288,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
       --live: #4fd183;
       --live-bg: #16311f;
+      --built: #8fd6a8;
+      --built-bg: #1b2c23;
       --done: #77aef2;
       --done-bg: #17263a;
       --partial: #e8a94b;
@@ -481,6 +486,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   .chip.live { background: var(--live-bg); color: var(--live); }
   .chip.live::before { background: var(--live); }
+  .chip.built { background: var(--built-bg); color: var(--built); }
+  .chip.built::before { background: var(--built); opacity: 0.75; }
   .chip.done { background: var(--done-bg); color: var(--done); }
   .chip.done::before { background: transparent; border: 1.5px solid var(--done); }
   .chip.partial { background: var(--partial-bg); color: var(--partial); }
@@ -525,6 +532,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .legend-item { display: flex; align-items: center; gap: 8px; }
   .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; box-sizing: border-box; }
   .swatch.live    { background: var(--live); }
+  .swatch.built   { background: var(--built); opacity: 0.75; }
   .swatch.done    { background: transparent; border: 1.5px solid var(--done); }
   .swatch.partial { background: transparent; border: 1.5px solid var(--partial); }
   .swatch.crit    { background: var(--crit); }
@@ -664,6 +672,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .who-ip { display: block; margin-top: 3px; font-family: var(--font-mono); font-size: 0.66rem; color: var(--ink-faint); }
   .usage-legend { border-top: none; border-radius: 12px; }
   .app-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  /* display:flex beats the UA's [hidden]{display:none}, so the picker showed
+     on every tab despite carrying the attribute. */
+  .app-pick[hidden] { display: none; }
   .app-n { margin-left: 7px; font-family: var(--font-mono); font-size: 0.66rem; opacity: 0.7; }
   tr.app-zero { opacity: 0.4; }
   .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
@@ -815,7 +826,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   }
   ?>
   <div class="kpis">
-    <div class="kpi"><span class="n">5</span><span class="l">Mind-suite repos &middot; 2 developer &middot; 2 website</span></div>
+    <div class="kpi"><span class="n">6</span><span class="l">Mind-suite repos &middot; 2 developer &middot; 2 website</span></div>
     <div class="kpi"><span class="n">2</span><span class="l">apps syncing through a server</span></div>
     <div class="kpi"><span class="n">1</span><span class="l">app syncing local-only, via Bonjour</span></div>
     <div class="kpi"><span class="n">4 / 4</span><span class="l">apps building &amp; running on Android</span></div>
@@ -929,7 +940,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
             // thing without translation. ?>
       <div class="legend-item"><span class="swatch running"></span> <strong>In Progress</strong> — shipping now</div>
       <div class="legend-item"><span class="swatch live"></span> <strong>Operational</strong> — installed, seen working</div>
-      <div class="legend-item"><span class="swatch done"></span> <strong>Build Only</strong> — builds, not installed</div>
+      <div class="legend-item"><span class="swatch built"></span> <strong>Built, not installed</strong> — this release compiled it; the device still carries an older one</div>
+      <div class="legend-item"><span class="swatch done"></span> <strong>Build Only</strong> — builds, deliberately never installed</div>
       <div class="legend-item"><span class="swatch partial"></span> <strong>Issue for Claude</strong> — mine to fix</div>
       <div class="legend-item"><span class="swatch crit"></span> <strong>Needs Attention</strong> — yours</div>
       <div class="legend-item"><span class="swatch none"></span> <strong>n/a</strong> — no such target</div>
@@ -1008,6 +1020,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
     const BANDS = [
       { sev:  4, label: 'In Progress',      color: 'var(--running)' },
       { sev:  0, label: 'Operational',      color: 'var(--live)' },
+      { sev:  5, label: 'Built, not installed', color: 'var(--built)' },
       { sev:  1, label: 'Build Only',       color: 'var(--done)' },
       { sev:  2, label: 'Issue for Claude', color: 'var(--partial)' },
       { sev:  3, label: 'Needs Attention',  color: 'var(--crit)' },
@@ -1036,8 +1049,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
       if (from === null)            { return 'First check'; }
       if (to === 4)                 { return 'Build started'; }
       if (from === 4) {
-        if (to === 0)  { return 'Build finished'; }
-        if (to === 1)  { return 'Built, not installed'; }
+        if (to === 0)  { return 'Build finished, installed'; }
+        // 5 is the common ending now: the release compiled it and left the
+        // device carrying the previous copy.
+        if (to === 5)  { return 'Built, not installed'; }
+        if (to === 1)  { return 'Build only'; }
         if (to === 2)  { return 'Finished with an issue'; }
         if (to === 3)  { return 'Build failed'; }
         if (to === -1) { return 'Target dropped'; }
@@ -1049,6 +1065,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
       if (from === 3)               { return 'Partly recovered'; }
       if (to === 2)                 { return 'Issue appeared'; }
       if (from === 2 && to === 0)   { return 'Issue fixed'; }
+      if (to === 5)                 { return 'Built, not installed'; }
+      if (from === 5 && to === 0)   { return 'Installed'; }
       if (to === 1)                 { return 'Build only'; }
       if (to === 0)                 { return 'Back to operational'; }
       return SEV_LABEL[to] || '';

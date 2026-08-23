@@ -39,11 +39,12 @@ function usage_log(string $action, ?string $user = null): void
     @chmod($file, (((int) @fileperms($file)) & 0777) | 0040);
 }
 
-/** Which app the request hit, read off the URI: reminders, calendar, bookshelf, … */
+/** Which app the request hit, read off the URI: chat, bookshelf, themes, status, … */
 function usage_app(): string
 {
     $p = (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
-    if (preg_match('#/calmind/([a-z]+)#', $p, $m)) { return $m[1]; }
+    // /calmind/ is the CalMind repo's app now, which authenticates itself and never
+    // reaches this logger; the branch that named its sub-apps went with the old suite.
     if (strpos($p, '/akisbookshelf') !== false) { return 'bookshelf'; }
     if (strpos($p, '/akisthemes') !== false) { return 'themes'; }
     $first = strtok(trim($p, '/'), '/');

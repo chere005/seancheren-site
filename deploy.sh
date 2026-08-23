@@ -68,7 +68,7 @@ while IFS= read -r f; do
     echo "    SYNTAX ERROR in $f"; php -l "$f" 2>&1 | tail -1
     errors=1
   fi
-done < <(find public calmind lib -name '*.php')
+done < <(find public lib -name '*.php')
 if [[ $errors -ne 0 ]]; then
   echo "Aborting — fix the syntax errors above and try again."
   exit 1
@@ -80,18 +80,16 @@ echo "    all PHP OK."
 # these paths, and --delete is never used — so a plain deploy can only ever add/update
 # code. openrsync on macOS has no --chmod, so a file left at 0600 is fixed on the server
 # (add-only: a+rX never grants write or strips anything, and config.php is skipped).
-# -L dereferences the symlinks that stitch the top-level calmind/ area into public/ and
-# lib/ (public/calmind, lib/tabbar.php, …), so the server always gets real files and its
-# layout is unchanged by the repo split.
+# -L is kept for any symlink that appears here later: it sends real files rather than a
+# link the server cannot follow. The calmind/ area it was added for is gone (2026-08-22).
 push_instance() {   # $1 = public dest   $2 = lib dest   $3 = human label
   local pub="$1" lib="$2" label="$3"
   # calmind/ belongs to the NEW CalMind app (the ~/GIT/CalMind monorepo, its own
-  # deploy script) — on TEST since 2026-08-07 and on PROD since 2026-08-20, when it
-  # took over /home/public/calmind and the suite's pages moved to
-  # /home/protected/suite-retired. This exclusion used to be test-only, under a
-  # comment reading "Prod still gets the suite"; a prod deploy after the cutover
-  # would have rsynced the retired suite straight back over the live app.
-  # Anchored, so only the top-level calmind/ is skipped.
+  # deploy script), which has owned /home/public/calmind on TEST since 2026-08-07 and
+  # on PROD since 2026-08-20. This repo no longer HOLDS a calmind/ of its own — the old
+  # plain-PHP suite was deleted on 2026-08-22 — so there is nothing here to send. The
+  # exclusion stays anyway: --delete is never used, but an anchored exclude is the one
+  # thing standing between a stray local calmind/ directory and the live app.
   local skip=(--exclude='/calmind')
   echo "==> [$label] public/ -> $pub/"
   # ${skip[@]+"${skip[@]}"}, not a bare "${skip[@]}": macOS ships bash 3.2, where an empty

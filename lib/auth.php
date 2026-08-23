@@ -12,7 +12,6 @@
 
 require_once __DIR__ . '/store.php';    // encrypted-at-rest storage helpers
 require_once __DIR__ . '/mail.php';     // sending the sign-up verification code
-require_once __DIR__ . '/util.php';     // small shared helpers (time parsing, …)
 require_once __DIR__ . '/usagelog.php'; // per-user usage log (hooked below)
 
 function app_config(): array
@@ -51,13 +50,17 @@ function suite_base(): string
 }
 
 /**
- * Where the CalMind suite's apps live under the instance: the instance base plus
- * /calmind. Suite cross-app links go through this; the session cookie path and the
- * apps that live outside the suite (chat, the bookshelf) keep suite_base() alone.
+ * Kept as suite_base()'s alias for the handful of callers that still say "the suite".
+ *
+ * It used to append /calmind, because the plain-PHP app suite lived there. That suite
+ * was deleted on 2026-08-22, superseded by the CalMind repo, whose build output now
+ * owns /calmind on the server and answers to its own auth rather than this login. So
+ * appending the path here would send a signed-in visitor to an app that has never
+ * heard of this session.
  */
 function suite_path(): string
 {
-    return suite_base() . '/calmind';
+    return suite_base();
 }
 
 // Everything in the suite runs on one clock. The server keeps UTC, so without this
@@ -71,12 +74,14 @@ function _self_path(): string
 }
 
 /**
- * Where you land once you're signed in — always the Calendar, whichever page asked
- * you to log in. Signing in from a bookmark to some other app used to drop you there,
- * which meant the answer to "what's on today" depended on which icon you'd tapped.
- * One session covers the whole suite, so the tab bar is a tap away from here anyway.
+ * Where you land once you're signed in, whichever page asked you to log in.
+ *
+ * It was the suite's Calendar until 2026-08-22. With the suite gone, this login guards
+ * Chat, Aki's Bookshelf, the themes workbench and the status page — no one of which is
+ * everybody's front door — so it lands on the site's own home page, which links to all
+ * of them.
  */
-const LOGIN_LANDING = '/calendar/';
+const LOGIN_LANDING = '/';
 
 /**
  * Accounts people made themselves, keyed by username: ['email' => …, 'password' => …].
@@ -616,9 +621,10 @@ function render_login(string $area, string $error = '', string $stage = 'login',
   <?php // The login page is the suite's front door, so it presents as CalMind — the
         // individual apps keep their own names on their own pages. ?>
   <meta name="apple-mobile-web-app-title" content="CalMind">
-  <link rel="apple-touch-icon" href="<?= suite_path() ?>/reminders/icon-180.png">
-  <link rel="icon" href="<?= suite_path() ?>/reminders/icon-192.png">
-  <link rel="manifest" href="<?= suite_path() ?>/manifest.webmanifest">
+  <?php // The site's own baked icons. These used to be the suite's, under
+        // /calmind/reminders/, and went with it. ?>
+  <link rel="apple-touch-icon" href="<?= suite_base() ?>/apple-touch-icon.png">
+  <link rel="icon" href="<?= suite_base() ?>/favicon-32.png">
   <style>
     <?= theme_css() ?>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

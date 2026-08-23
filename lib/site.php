@@ -14,9 +14,14 @@ function site_theme(): string {
 
 function site_nav($active) {
   $links = ['' => 'Home', 'projects' => 'Projects', 'about' => 'About', 'contact' => 'Contact', 'themepicker' => 'Themes'];
+  // suite_base(), so /test/ and /dev/ keep their own nav. These used to be hardcoded
+  // absolute, which meant every link on a sandbox page jumped straight to production —
+  // invisible while the app suite next door did carry the prefix and was what anyone
+  // actually opened a sandbox to look at.
+  $base = suite_base();
   $out = '<nav class="sitenav">';
   foreach ($links as $slug => $label) {
-    $href = $slug === '' ? '/' : '/' . $slug . '/';
+    $href = $slug === '' ? ($base === '' ? '/' : $base . '/') : $base . '/' . $slug . '/';
     $cls = $slug === $active ? ' class="on"' : '';
     $out .= '<a href="' . $href . '"' . $cls . '>' . $label . '</a>';
   }
@@ -27,7 +32,7 @@ function site_nav($active) {
   $current = $links[$active] ?? 'Home';
   $out .= '<details class="sitenav-dd"><summary>' . $current . ' <span class="caret">&#9662;</span></summary><div class="menu">';
   foreach ($links as $slug => $label) {
-    $href = $slug === '' ? '/' : '/' . $slug . '/';
+    $href = $slug === '' ? ($base === '' ? '/' : $base . '/') : $base . '/' . $slug . '/';
     $cls = $slug === $active ? ' class="on"' : '';
     $out .= '<a href="' . $href . '"' . $cls . '>' . $label . '</a>';
   }
@@ -36,6 +41,8 @@ function site_nav($active) {
 
 function site_page($active, $title, $bodyHtml) {
   $nav = site_nav($active);
+  // The logo is a link home, and home is this instance's home.
+  $homeHref = suite_base() === '' ? '/' : suite_base() . '/';
   $t = theme_vars(site_theme());
   $vars = '';
   foreach ($t['vars'] as $k => $v) { $vars .= "$k: $v; "; }
@@ -143,7 +150,7 @@ function site_page($active, $title, $bodyHtml) {
 </head>
 <body>
 <div class="wrap">
-<a class="sitelogo" href="/" aria-label="Home">SC</a>
+<a class="sitelogo" href="{$homeHref}" aria-label="Home">SC</a>
 $nav
 $bodyHtml
 </div>

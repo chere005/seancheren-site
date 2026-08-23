@@ -226,7 +226,10 @@ $palettes = palettes_load($file);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Themes</title>
-  <meta name="theme-color" content="#111111">
+  <?php // theme_bg(), not a literal: this page paints itself from the user's theme, and a
+        // pinned #111 left the status bar black behind a cream page. It went unnoticed
+        // while the suite's own pages carried the same meta correctly. ?>
+  <meta name="theme-color" content="<?= e(theme_bg()) ?>">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Themes">

@@ -1,10 +1,25 @@
 <?php
-// Locate the shared lib/ — local dev (../../lib) or NFSN (/home/protected/lib).
+// A page served under /test/ (the sandbox mirror) loads lib-test/ instead of lib/, and one
+// served under /dev/ (a second, fixed sandbox slot) loads lib-dev/ — each mirror
+// isolated in code, config and data. The marketing pages hold no data, so they used to
+// keep a plain lib-only preamble; they carry this one since 2026-08-22, when site_nav()
+// started building its links through suite_base(). Without it a sandbox page could not
+// know its own base — and, worse, could not find a lib at all from one directory down.
+$__test   = strpos(__DIR__, '/test/') !== false
+         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0;
+$__dev    = strpos(__DIR__, '/dev/') !== false
+         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/dev/', 5) === 0;
 $__libDir = null;
-foreach ([__DIR__ . '/../../lib', '/home/protected/lib'] as $__c) {
+$__cands  = $__dev
+    ? [__DIR__ . '/../../../lib-dev', '/home/protected/lib-dev']
+    : ($__test
+        ? [__DIR__ . '/../../../lib-test', '/home/protected/lib-test']
+        : [__DIR__ . '/../../lib',         '/home/protected/lib']);
+foreach ($__cands as $__c) {
     if (is_file($__c . '/site.php')) { $__libDir = $__c; break; }
 }
 require_once $__libDir . '/site.php';
+
 
 ob_start();
 ?>
@@ -31,7 +46,7 @@ $tIcon = '<svg class="giticon" viewBox="0 0 16 16" width="20" height="20" aria-h
 <h4>CalMind</h4>
 <p>Sometimes when I forget to check off a reminder from yesterday, I wish it would still show up on my calendar today.. I also wanted my notes more integrated with my calendar and reminders, as well as a habit tracker that doesn't limit me to 5 days (for the low cost of several dollars per month to upgrade?!).. So my good friend claudio built a web app that is working pretty nicely for me. I've moved my entire calendar and reminders system over, and I am quite happy. It's more important to me that it's custom than that it's generally usable, but since everything is open source, including the start of an iOS and Android app, anybody is free to modify or distribute it however they please.</p>
 <p class="plinks">
-  <a class="gitlink" href="https://seancheren.com/calmind/" title="Open CalMind" aria-label="Open CalMind"><img class="giticon appicon" src="/calmind/reminders/icon-180.png" alt="" width="20" height="20"></a>
+  <a class="gitlink" href="https://seancheren.com/calmind/" title="Open CalMind" aria-label="Open CalMind"><img class="giticon appicon" src="/calmind/icon-192.png" alt="" width="20" height="20"></a>
   <a class="gitlink" href="https://github.com/chere005/CalMind" title="CalMind on GitHub" aria-label="CalMind on GitHub"><?= $gitIcon ?></a>
 </p>
 

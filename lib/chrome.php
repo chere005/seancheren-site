@@ -198,16 +198,12 @@ function settings_modal_html(string $extra = '', bool $showShare = false): strin
                  . ' title="' . $label . '" aria-label="' . $label . '">'
                  . '<span class="themedot" style="background:' . $t['vars']['--accent'] . '"></span></button>';
     }
-    // The footer is one row of three same-sized icon buttons — Share, Widget, Done —
-    // and it's the same row in every app, so preferences never move around. Share needs
-    // lib/sharing.php, which not every app loads, hence the function_exists guard.
+    // The footer is one row of same-sized icon buttons, the same row in every app, so
+    // preferences never move around. Share needed lib/sharing.php and the Widget button
+    // needed the Calendar's feed page; both went with the app suite on 2026-08-22, so
+    // Done is what is left. The guard stays: $share is still wired through the call.
     $share = ($showShare && function_exists('share_button_html')) ? share_button_html() : '';
-    // The iOS widget is set up from the Calendar's feed page, but the link belongs in
-    // every app's preferences so the menu reads the same wherever you opened it.
-    $widget = '<a class="setact" href="' . (function_exists('suite_path') ? suite_path() : '') . '/calendar/feed.php" title="Widget" aria-label="Widget">'
-            . '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"'
-            . ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-            . '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg></a>';
+    $widget = '';
     return <<<HTML
 <div class="setmodal-backdrop" id="setBackdrop">
   <div class="setmodal">

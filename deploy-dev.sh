@@ -107,7 +107,7 @@ while IFS= read -r f; do
     echo "    SYNTAX ERROR in $f"; php -l "$f" 2>&1 | tail -1
     errors=1
   fi
-done < <(find "$SRC/public" "$SRC/calmind" "$SRC/lib" -name '*.php')
+done < <(find "$SRC/public" "$SRC/lib" -name '*.php')
 if [ "$errors" -ne 0 ]; then
   echo "Aborting — fix the syntax errors above and try again."
   exit 1

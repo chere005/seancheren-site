@@ -15,7 +15,41 @@ ServerSignature Off
 # itself and loop.
 RewriteEngine On
 RewriteCond %{REQUEST_URI} ^(.*)/(?:CalMind|Calmind|CALMIND|calMind)((?:/.*)?)$
-RewriteRule ^ %1/calmind%2 [R=301,L]
+# (https://%{HTTP_HOST} for the same reason as the /request alias below: a
+# path-only target comes back as http:// on this host. Measured 2026-08-21 —
+# https://seancheren.com/CalMind was redirecting to http://seancheren.com/
+# calmind, in the clear, and only the site's http->https rule saved it.)
+RewriteRule ^ https://%{HTTP_HOST}%1/calmind%2 [R=301,L]
+
+# The meeting-request link, at the short address people are given (Sean,
+# 2026-08-21: "make seancheren.com/request point to seancheren.com/calmind/
+# request"). It is CalMind's public page and lives under /calmind; this is the
+# apex's alias for it.
+#
+# A REDIRECT, not an internal rewrite, and that is forced rather than chosen:
+# the app builds its API address relative to the page it is on
+# (`new URL('api/index.php', location.href)` — apps/app/src/config.ts). Served
+# in place at /request the page would ask /api/index.php, which does not
+# exist, and a request page that draws a calendar it can never fill is worse
+# than a 404. Redirected, it runs at its own path with everything already
+# proven there.
+#
+# 302, not 301: a permanent redirect is cached by browsers past the point of
+# recall, and this is a one-line decision he may want back.
+#
+# NC so /Request works too — mod_speling below only rescues paths that name a
+# real FILE, and this one names a rewrite rule. Before the host routing, so
+# the subdomains get the same alias: the target is host-relative, so on
+# test.seancheren.com it lands on test's own copy.
+#
+# The target is ABSOLUTE, and https is written out by hand, because NFSN
+# terminates TLS in front of Apache and forwards plain http: Apache believes
+# every request arrived unencrypted, so a path-only target gets expanded to
+# "http://…" and an https visitor is bounced out to plaintext before the
+# site's own http->https 301 drags them back. Two extra round trips and one
+# of them in the clear, for a link handed to strangers. HTTP_HOST rather than
+# a literal so test and dev keep their own hostname.
+RewriteRule ^request/?$ https://%{HTTP_HOST}/calmind/request [R=302,L,NC]
 
 # ── Subdomain routing (Sean, 2026-08-20) ────────────────────────────────────
 #

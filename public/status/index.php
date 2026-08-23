@@ -408,6 +408,10 @@ function cell_chip(?int $sev, string $repo, array $running): string
   /* ---------- table ---------- */
 
   .table-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .table-card th[data-sort-col] { cursor: pointer; }
+  .table-card th[data-sort-col]::after { content: " \2195"; opacity: 0.35; }
+  .table-card th.sorted-asc::after { content: " \2191"; opacity: 1; }
+  .table-card th.sorted-desc::after { content: " \2193"; opacity: 1; }
   /* Sean, 2026-08-23: "there's no padding on the left or right of the page".
      The first attempt at this made it WORSE — a max(12px, …) override replaced
      the 32px the desktop rule already had, so every width got 12. The floor
@@ -543,7 +547,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
      gated row has a sign-in and a scope, a public one has neither and used to
      carry two columns of "n/a" to prove it. */
   .endpoint-row {
-    display: grid; grid-template-columns: 150px minmax(0, 1.6fr) 80px 108px 116px 132px; gap: 14px;
+    display: grid; grid-template-columns: 148px minmax(0, 1.5fr) 74px 100px 112px 118px 96px; gap: 13px;
     padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: start; font-size: 0.85rem;
   }
   /* The public rows keep the SAME tracks and simply leave two of them empty,
@@ -621,6 +625,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .usage-dot.out { background: var(--partial); }
   .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
 
+  .tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
   .inst-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .inst-label { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.08em;
                 text-transform: uppercase; color: var(--ink-faint); margin-right: 2px; }
@@ -675,7 +680,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   #pane-pick .repo-pick-menu { right: auto; left: 0; max-height: 62vh; overflow-y: auto; }
   .repo-pick-menu .dot { width: 10px; height: 3px; border-radius: 2px; flex: none; }
   .endpoint-url { font-family: var(--font-mono); font-size: 0.76rem; color: var(--ink-faint); word-break: break-all; }
-  .scope-gate { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 0.68rem; color: var(--partial); }
+  .scope-gate { display: inline-block; font-family: var(--font-mono); font-size: 0.72rem; color: var(--partial); }
   .endpoint-auth { color: var(--ink-soft); line-height: 1.4; }
   .endpoint-ms { font-family: var(--font-mono); color: var(--ink-faint); font-size: 0.78rem; }
 
@@ -716,11 +721,22 @@ function cell_chip(?int $sev, string $repo, array $running): string
           // where something IS wrong, where naming it is the whole point. ?>
   </header>
 
+  <?php // ONE instance picker for the whole page — Sean, 2026-08-23: "history
+        // live status and usage should all have the prod/test/dev picker". It
+        // drives the Current web cells, the Live Status domain sections and
+        // the Usage lanes from a single choice. ?>
+  <div class="tabs-row">
   <div class="tabs">
     <button class="tab-btn active" data-tab="current">Current</button>
     <button class="tab-btn" data-tab="history">History</button>
     <button class="tab-btn" data-tab="live">Live Status</button>
     <button class="tab-btn" data-tab="usage">Usage</button>
+  </div>
+  <div class="inst-pick">
+    <?php foreach ($WEB_INSTANCES as $inst => $host): ?>
+      <button class="inst-tab<?= $inst === 'prod' ? ' on' : '' ?>" data-inst="<?= e($inst) ?>"><?= e($host) ?></button>
+    <?php endforeach; ?>
+  </div>
   </div>
 
   <!-- ============================================================ CURRENT -->
@@ -743,13 +759,6 @@ function cell_chip(?int $sev, string $repo, array $running): string
     <div class="kpi"><span class="n">3 / 3</span><span class="l">phone slots spent (free-tier cap)</span></div>
   </div>
 
-  <div class="inst-pick">
-    <span class="inst-label">Web / server</span>
-    <?php foreach ($WEB_INSTANCES as $inst => $host): ?>
-      <button class="inst-tab<?= $inst === 'prod' ? ' on' : '' ?>" data-inst="<?= e($inst) ?>"><?= e($host) ?></button>
-    <?php endforeach; ?>
-  </div>
-
   <?php
   // ONE TABLE PER CATEGORY, all from $repos. Sean, 2026-08-22: "group
   // MindSuite, Developer (AgentSuite/LocalLLM), and website repos".
@@ -769,9 +778,13 @@ function cell_chip(?int $sev, string $repo, array $running): string
           <col class="plat"><col class="plat"><col class="plat"><col class="plat"><col class="plat">
         </colgroup>
         <thead>
+          <?php // Sortable like Live's — Sean, 2026-08-23: "sorting by columns
+                // should work in the current page too". Sorting is by the
+                // cell's visible text, which for a chip is its label — so
+                // Operational groups with Operational, and n/a sinks. ?>
           <tr>
-            <th>Repo</th><th>Web / server</th><th>Sync &amp; sharing mechanism</th>
-            <th>macOS</th><th>Windows</th><th>iOS</th><th>watchOS</th><th>Android</th>
+            <th data-sort-col="0">Repo</th><th data-sort-col="1">Web / server</th><th data-sort-col="2">Sync &amp; sharing mechanism</th>
+            <th data-sort-col="3">macOS</th><th data-sort-col="4">Windows</th><th data-sort-col="5">iOS</th><th data-sort-col="6">watchOS</th><th data-sort-col="7">Android</th>
           </tr>
         </thead>
         <tbody>
@@ -1340,7 +1353,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
         <?php // The domain is the subsection. A whole sandbox being down is one
               // fact, and reading it as several unrelated rows is how it gets
               // mistaken for a coincidence. ?>
-        <h3 class="domain-head"><?= e($domain) ?><?= $domain === 'seancheren.com' ? ' <span class="domain-note">production</span>' : ' <span class="domain-note">sandbox</span>' ?></h3>
+        <?php $dInst = strncmp($domain, 'test.', 5) === 0 ? 'test' : (strncmp($domain, 'dev.', 4) === 0 ? 'dev' : 'prod'); ?>
+        <div class="domain-block" data-inst-only="<?= e($dInst) ?>">
+        <h3 class="domain-head"><?= e($domain) ?><?= $dInst === 'prod' ? ' <span class="domain-note">production</span>' : ' <span class="domain-note">sandbox</span>' ?></h3>
         <?php
         /**
          * SIGN-IN REQUIRED vs PUBLIC, as two subsections — Sean, 2026-08-23:
@@ -1366,7 +1381,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
               <div data-col="0">Endpoint</div><div data-col="1">URL</div><div data-col="2">Status</div>
               <?php if ($gated): ?><div data-col="3">Sign-in</div><?php endif; ?>
               <div data-col="<?= $gated ? 4 : 3 ?>">Response</div>
-              <?php if ($gated): ?><div data-col="5">Auth by</div><?php endif; ?>
+              <?php if ($gated): ?><div data-col="5">Auth by</div><div data-col="6">Access</div><?php endif; ?>
             </div>
             <div class="domain-rows">
             <?php foreach ($secList as $ep): $r = $results[$key][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
@@ -1405,14 +1420,23 @@ function cell_chip(?int $sev, string $repo, array $running): string
                         // named no owner at all. ?>
                   <div data-sort="<?= e($ep['scope_key'] ?? 'public') ?>">
                     <span class="scope-chip" title="<?= e(strip_tags($ep['auth'] ?? '')) ?>"><?= e(scope_provider($ep['scope_key'] ?? '') ?? 'unknown') ?></span>
-                    <?php if (!empty($ep['gate'])): ?><span class="scope-gate"><?= e($ep['gate']) ?></span><?php endif; ?>
                   </div>
+                  <?php // WHO exactly can get in — Sean, 2026-08-23: "the
+                        // specific users that can login (if they exist)". A
+                        // page gated to named accounts names them; one any
+                        // signed-in account opens says so in two words. ?>
+                  <div data-sort="<?= e($ep['gate'] ?? '~') ?>"><?php
+                    echo empty($ep['gate'])
+                        ? '<span class="scope-chip">any account</span>'
+                        : '<span class="scope-gate">' . e(preg_replace('/\s+only$/', '', $ep['gate'])) . '</span>';
+                  ?></div>
                 <?php endif; ?>
               </div>
             <?php endforeach; ?>
             </div>
           </div>
         <?php endforeach; ?>
+        </div>
       <?php endforeach; ?>
     </div>
   <?php endforeach; ?>
@@ -1443,13 +1467,16 @@ function cell_chip(?int $sev, string $repo, array $running): string
    */
   $usage = hit_usage();
   $uw = $usage['windows'];
-  $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'claudio' => 'Claudio', 'test' => 'Tests'];
+  $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'claudio' => 'Claudio', 'test' => 'Tests', 'dev' => 'Dev'];
   $laneDek  = [
       'sean'    => 'production, signed in as sean',
       'other'   => 'production, anybody else — signed in or not',
-      'claudio' => "Claude's own requests, either instance",
+      'claudio' => "Claude's own requests, any instance",
       'test'    => 'the test.seancheren.com sandbox',
+      'dev'     => 'the dev.seancheren.com sandbox',
   ];
+  // Which instance's traffic a lane is — 'all' survives every picker choice.
+  $laneInst = ['sean' => 'prod', 'other' => 'prod', 'claudio' => 'all', 'test' => 'test', 'dev' => 'dev'];
   ?>
 
   <?php // The log rotates once at 4 MB, so a long window can be reporting on a
@@ -1458,7 +1485,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   <div class="kpis" style="margin-bottom:6px">
     <?php foreach ($laneName as $lk => $ln): ?>
-      <div class="kpi">
+      <div class="kpi" data-inst-only="<?= e($laneInst[$lk]) ?>">
         <span class="n"><?= number_format($usage['lanes'][$lk]['3d'] ?? 0) ?></span>
         <span class="l"><?= e($ln) ?> &middot; last 3 days</span>
       </div>
@@ -1468,7 +1495,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   <div data-live="usage-tables">
   <?php foreach ($laneName as $lk => $ln):
     $rows = array_filter($usage['people'], fn($p) => $p['lane'] === $lk); ?>
-    <div class="table-card">
+    <div class="table-card" data-inst-only="<?= e($laneInst[$lk]) ?>">
       <div class="group-head">
         <h2><?= e($ln) ?></h2>
         <p><?= e($laneDek[$lk]) ?></p>
@@ -1606,10 +1633,32 @@ function cell_chip(?int $sev, string $repo, array $running): string
   function showInstance(inst) {
     document.querySelectorAll('.inst-tab').forEach(b => b.classList.toggle('on', b.dataset.inst === inst));
     document.querySelectorAll('.web-cell').forEach(c => c.classList.toggle('on', c.dataset.inst === inst));
+    // Whole blocks that belong to one instance — Live's domain sections,
+    // Usage's lane tables. 'all' survives every choice.
+    document.querySelectorAll('[data-inst-only]').forEach(el => {
+      const want = el.dataset.instOnly;
+      el.hidden = !(want === 'all' || want === inst);
+    });
   }
   document.querySelectorAll('.inst-tab').forEach(b =>
     b.addEventListener('click', () => showInstance(b.dataset.inst)));
   showInstance('prod');
+
+  // The Current tables sort on a header click, same gesture as Live Status.
+  // Delegated, because the live poller replaces rows wholesale.
+  document.addEventListener('click', (e) => {
+    const th = e.target.closest('.table-card th[data-sort-col]');
+    if (!th) { return; }
+    const table = th.closest('table'), body = table.querySelector('tbody');
+    const col = +th.dataset.sortCol;
+    const dir = th.classList.contains('sorted-asc') ? -1 : 1;
+    table.querySelectorAll('th').forEach(o => o.classList.remove('sorted-asc', 'sorted-desc'));
+    th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
+    [...body.querySelectorAll('tr')]
+      .sort((a, b) => dir * (a.children[col]?.textContent.trim() || '')
+        .localeCompare(b.children[col]?.textContent.trim() || '', undefined, { numeric: true }))
+      .forEach(tr => body.appendChild(tr));
+  });
 
   function showTab(name) {
     const panel = document.getElementById('tab-' + name);

@@ -253,7 +253,11 @@ function hit_lane(array $row): string
     // Claude's traffic first, whichever instance it hit: "separate ALL your
     // traffic" means the sandbox runs count as its own too.
     if (($row['agent'] ?? '-') === 'claudio') { return 'claudio'; }
-    if (($row['instance'] ?? 'prod') !== 'prod') { return 'test'; }
+    $inst = $row['instance'] ?? 'prod';
+    // dev is its own lane since it became a real instance (2026-08-23) — its
+    // traffic filed under "test" would say the wrong sandbox was busy.
+    if ($inst === 'dev') { return 'dev'; }
+    if ($inst !== 'prod') { return 'test'; }
     return ($row['user'] ?? '-') === 'sean' ? 'sean' : 'other';
 }
 
@@ -296,7 +300,7 @@ function hit_usage(): array
     $rows = hit_tail_since($now - max(array_column($wins, 'secs')), 8 * 1024 * 1024);
 
     $people = [];
-    $lanes  = ['sean' => [], 'other' => [], 'claudio' => [], 'test' => []];
+    $lanes  = ['sean' => [], 'other' => [], 'claudio' => [], 'test' => [], 'dev' => []];
     $series = [];
     foreach ($wins as $wk => $w) {
         foreach (array_keys($lanes) as $lk) { $lanes[$lk][$wk] = 0; }

@@ -183,7 +183,9 @@ $WEB_PROBE_AT = [
         'AcctMind'        => ['https://test.seancheren.com/AcctMind/'],
         'seancheren-site' => ['https://test.seancheren.com/'],
     ],
-    'dev' => [],
+    'dev' => [
+        'seancheren-site' => ['https://dev.seancheren.com/'],
+    ],
 ];
 // The label a web cell shows for each repo on each instance.
 $WEB_LABEL_AT = [
@@ -196,7 +198,9 @@ $WEB_LABEL_AT = [
         'CalMind' => 'test.&#8203;seancheren.com/CalMind', 'ChefMind' => 'test.&#8203;seancheren.com/ChefMind',
         'AcctMind' => 'test.&#8203;seancheren.com/AcctMind', 'seancheren-site' => 'test.&#8203;seancheren.com',
     ],
-    'dev' => [],
+    'dev' => [
+        'seancheren-site' => 'dev.&#8203;seancheren.com',
+    ],
 ];
 // Production stays the default everywhere else in this file, so nothing that
 // asks for "the" web status silently starts answering about the sandbox.
@@ -374,6 +378,26 @@ function status_samples(): array
 // briefly on disk so the 60s auto-refresh below doesn't hammer every
 // endpoint on every single page load from every open tab.
 function check_url(string $url, ?string $post = null): array
+{
+    /**
+     * ONE RETRY BEFORE 'DOWN'. Sean, 2026-08-23: "why is
+     * test.seancheren.com/ChefMind red in status?" — it wasn't down; one probe
+     * blipped and the verdict sat red for the whole cache window. A single
+     * failed connection is the least trustworthy reading a network makes, and
+     * a status page that cries wolf trains its one reader to stop looking.
+     * A retried failure is a real one.
+     */
+    $r = check_url_once($url, $post);
+    if (!$r['ok']) {
+        usleep(400000);
+        $again = check_url_once($url, $post);
+        if ($again['ok']) { return $again; }
+        $r['ms'] = $again['ms'];
+    }
+    return $r;
+}
+
+function check_url_once(string $url, ?string $post = null): array
 {
     $start = microtime(true);
     // GET, not HEAD: several of these are plain procedural pages that don't
@@ -615,6 +639,9 @@ $endpoints = [
         'test.seancheren.com' => [
             ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope_key' => 'public',       'auth' => 'Public'],
             ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope_key' => 'site', 'gate' => 'sean only', 'auth' => "Its own account store, then sean only"],
+        ],
+        'dev.seancheren.com' => [
+            ['label' => 'Home', 'app' => 'site', 'url' => 'https://dev.seancheren.com/', 'scope_key' => 'public', 'auth' => 'Public'],
         ],
     ],
 ];

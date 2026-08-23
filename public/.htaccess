@@ -79,12 +79,14 @@ RewriteCond %{HTTP_HOST} ^test\. [NC]
 RewriteCond %{REQUEST_URI} !^/test/
 RewriteRule ^(.*)$ /test/$1 [L]
 
-# The /dev slot is GONE (Sean, 2026-08-23: it "shouldn't even exist anymore").
-# It held no data — data-dev was never created — so nothing was migrated, and
-# the routing for it went with the directory. dev.seancheren.com is still an
-# ALIAS on the hosting account: removing that is a control-panel action, and
-# until it happens the subdomain resolves to this same docroot and serves the
-# production site rather than a sandbox.
+# The /dev slot is BACK (Sean, 2026-08-23: "deploy a clone from prod to test
+# and dev.. make sure test and dev have completely separate accounts and
+# data"). It was retired earlier the same day; the difference now is that it
+# is a real third instance with its own lib-dev, data-dev and account store,
+# not an unowned directory. Same shape as test, one hostname over.
+RewriteCond %{HTTP_HOST} ^dev\. [NC]
+RewriteCond %{REQUEST_URI} !^/dev/
+RewriteRule ^(.*)$ /dev/$1 [L]
 
 # …and the old paths on the APEX are GONE — not moved (Sean, 2026-08-20: "it
 # should just stop working"). A 301 would keep every old bookmark and link
@@ -110,7 +112,7 @@ RewriteRule ^(.*)$ /test/$1 [L]
 # made possible: on test.seancheren.com the internal rewrite above maps
 # /calmind to /test/calmind, so ONE export serves all three and no instance
 # reaches into another's directory for its own assets.
-RewriteCond %{HTTP_HOST} !^test\. [NC]
+RewriteCond %{HTTP_HOST} !^(test|dev)\. [NC]
 RewriteCond %{REQUEST_URI} ^/(test|dev)/
 RewriteRule ^ - [R=404,L]
 

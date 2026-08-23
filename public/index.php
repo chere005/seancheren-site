@@ -14,12 +14,17 @@
 // routing needs: test.seancheren.com/X is rewritten to /test/X internally, so
 // REQUEST_URI never says /test/ there either.
 $__host   = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
-$__test   = preg_match('#/test(/|$)#', __DIR__) === 1
-         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0
-         || strncmp($__host, 'test.', 5) === 0;
+// Which sandbox, if any — '' is production. dev came back on 2026-08-23
+// ("deploy a clone from prod to test and dev"), same three signals as test.
+$__inst   = '';
+foreach (['test', 'dev'] as $__i) {
+    if (preg_match('#/' . $__i . '(/|$)#', __DIR__) === 1
+        || strncmp($_SERVER['REQUEST_URI'] ?? '', '/' . $__i . '/', strlen($__i) + 2) === 0
+        || strncmp($__host, $__i . '.', strlen($__i) + 1) === 0) { $__inst = $__i; break; }
+}
 $__libDir = null;
-$__cands  = $__test
-    ? [__DIR__ . '/../../lib-test', '/home/protected/lib-test']
+$__cands  = $__inst !== ''
+    ? [__DIR__ . '/../../lib-' . $__inst, '/home/protected/lib-' . $__inst]
     : [__DIR__ . '/../lib',      '/home/protected/lib'];
 foreach ($__cands as $__c) {
     if (is_file($__c . '/site.php')) { $__libDir = $__c; break; }

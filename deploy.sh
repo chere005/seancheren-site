@@ -50,7 +50,7 @@ MODE=""
 for arg in "$@"; do
   case "$arg" in
     -n|--dry-run)            DRY="--dry-run" ;;
-    test|prod|both|promote)  MODE="$arg" ;;
+    test|dev|prod|both|all|promote)  MODE="$arg" ;;
     *) echo "Unknown argument: $arg"
        echo "Usage: ./deploy.sh [test|prod|both|promote] [--dry-run]"; exit 2 ;;
   esac
@@ -74,6 +74,11 @@ if [[ $errors -ne 0 ]]; then
   exit 1
 fi
 echo "    all PHP OK."
+
+
+# The page's own build stamp, read by /status/'s live poller to know when the
+# PAGE (not the data) changed underneath an open tab, and reload it.
+git rev-parse --short HEAD > public/status/.page-ver 2>/dev/null || printf 'unknown' > public/status/.page-ver
 
 # rsync the source into one instance's public + lib dirs, then make it web-readable
 # there. config.php is never sent (each instance keeps its own), data dirs are never in
@@ -112,46 +117,66 @@ push_instance() {   # $1 = public dest   $2 = lib dest   $3 = human label
   fi
 }
 
-# The test instance needs its own config.php in lib-test. It carries NO secrets of its
-# own: it requires production's config.php for the real accounts/secrets, then overrides
-# only where data lives (data-test) and what prefix links are built under (/test). So we
-# create it once, on the server, if it is missing. Delete it to reset the test instance.
-ensure_test_config() {
-  [[ -n "$DRY" ]] && { echo "==> [TEST] would ensure /home/protected/lib-test/config.php exists"; return 0; }
-  echo "==> [TEST] ensuring lib-test/config.php exists…"
-  $SSH "$HOST" '
-    mkdir -p /home/protected/lib-test
-    if [ ! -f /home/protected/lib-test/config.php ]; then
+# Each sandbox instance needs its own config.php beside its own lib. It inherits
+# production's for the operational secrets (mail, NFSN keys), then CUTS the
+# account seed loose — Sean, 2026-08-23: "make sure test and dev have completely
+# separate accounts and data". The sandboxes used to inherit prod's users, which
+# separated the data and not the identity: a sandbox password WAS the production
+# password. Now a sandbox starts with no accounts at all and you sign up through
+# its own signup flow (verification code 5678 while mail is stubbed), landing in
+# its own encrypted store. Created once, on the server; delete the file to reset.
+ensure_sandbox_config() {   # $1 = instance name (test | dev)
+  local INST="$1"
+  [[ -n "$DRY" ]] && { echo "==> [$INST] would ensure /home/protected/lib-$INST/config.php exists"; return 0; }
+  echo "==> [$INST] ensuring lib-$INST/config.php exists…"
+  $SSH "$HOST" "
+    mkdir -p /home/protected/lib-$INST
+    if [ ! -f /home/protected/lib-$INST/config.php ]; then
       {
-        echo "<?php"
-        echo "// Test-instance config for the /test/ sandbox mirror. Inherits the real"
-        echo "// accounts/secrets from production, then isolates storage and prefixes"
-        echo "// links. Not deployed; created once by deploy.sh. Delete to reset test."
-        echo "\$c = require \"/home/protected/lib/config.php\";"
-        echo "\$c[\"data_dir\"] = \"/home/protected/data-test\";"
-        echo "\$c[\"base\"]     = \"/test\";"
-        echo "return \$c;"
-      } > /home/protected/lib-test/config.php
-      chmod a+r /home/protected/lib-test/config.php
-      echo "    created /home/protected/lib-test/config.php"
+        echo '<?php'
+        echo '// $INST-instance config. Inherits operational secrets from production,'
+        echo '// then isolates storage, links and ACCOUNTS — a sandbox login must not'
+        echo '// be a production login. Not deployed; created by deploy.sh. Delete to reset.'
+        echo '\$c = require \"/home/protected/lib/config.php\";'
+        echo '\$c[\"data_dir\"] = \"/home/protected/data-$INST\";'
+        echo '\$c[\"base\"]     = \"/$INST\";'
+        echo 'unset(\$c[\"users\"], \$c[\"data_key\"]);'
+        echo 'return \$c;'
+      } > /home/protected/lib-$INST/config.php
+      chmod a+r /home/protected/lib-$INST/config.php
+      mkdir -p /home/protected/data-$INST && chgrp web /home/protected/data-$INST && chmod 2770 /home/protected/data-$INST
+      echo \"    created lib-$INST/config.php and data-$INST/\"
     else
-      echo "    already present"
+      echo '    already present'
     fi
-  '
+  "
 }
 
 case "$MODE" in
   test)
-    ensure_test_config
+    ensure_sandbox_config test
     push_instance /home/public/test /home/protected/lib-test TEST
+    ;;
+  dev)
+    ensure_sandbox_config dev
+    push_instance /home/public/dev /home/protected/lib-dev DEV
     ;;
   prod)
     push_instance /home/public /home/protected/lib PROD
     ;;
   both)
     push_instance /home/public /home/protected/lib PROD
-    ensure_test_config
+    ensure_sandbox_config test
     push_instance /home/public/test /home/protected/lib-test TEST
+    ;;
+  all)
+    # PROD first, then its two clones — Sean, 2026-08-23: "deploy a clone from
+    # prod to test and dev". One tree, three instances, three data dirs.
+    push_instance /home/public /home/protected/lib PROD
+    ensure_sandbox_config test
+    push_instance /home/public/test /home/protected/lib-test TEST
+    ensure_sandbox_config dev
+    push_instance /home/public/dev /home/protected/lib-dev DEV
     ;;
   promote)
     # Copy the *live test* tree onto production, entirely on the server, so prod ends up

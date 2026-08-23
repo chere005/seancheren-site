@@ -14,12 +14,17 @@
 // routing needs: test.seancheren.com/X is rewritten to /test/X internally, so
 // REQUEST_URI never says /test/ there either.
 $__host   = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
-$__test   = preg_match('#/test(/|$)#', __DIR__) === 1
-         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0
-         || strncmp($__host, 'test.', 5) === 0;
+// Which sandbox, if any — '' is production. dev came back on 2026-08-23
+// ("deploy a clone from prod to test and dev"), same three signals as test.
+$__inst   = '';
+foreach (['test', 'dev'] as $__i) {
+    if (preg_match('#/' . $__i . '(/|$)#', __DIR__) === 1
+        || strncmp($_SERVER['REQUEST_URI'] ?? '', '/' . $__i . '/', strlen($__i) + 2) === 0
+        || strncmp($__host, $__i . '.', strlen($__i) + 1) === 0) { $__inst = $__i; break; }
+}
 $__libDir = null;
-$__cands  = $__test
-    ? [__DIR__ . '/../../../lib-test', '/home/protected/lib-test']
+$__cands  = $__inst !== ''
+    ? [__DIR__ . '/../../../lib-' . $__inst, '/home/protected/lib-' . $__inst]
     : [__DIR__ . '/../../lib',      '/home/protected/lib'];
 foreach ($__cands as $__c) {
     if (is_file($__c . '/auth.php')) { $__libDir = $__c; break; }
@@ -860,13 +865,24 @@ function cell_chip(?int $sev, string $repo, array $running): string
   foreach ($samples as $smp) {
       foreach (array_keys($smp['s'] ?? []) as $k) { $seenKeys[$k] = true; }
   }
+  // A PLATFORM THAT NEVER EXISTED STAYS OFF THE CHART — Sean, 2026-08-23:
+  // "if the platform intentionally doesn't exist, don't show it on the
+  // history". n/a is recorded in the samples so that a target APPEARING or
+  // DROPPING is an event with a before; but a line that has read n/a for its
+  // whole recorded life says only "there is no such thing", forever, and six
+  // of those made CoreMind's pane an empty grid. The n/a band stays on the
+  // axis for the transitions.
+  $everReal = [];
+  foreach ($samples as $smp) {
+      foreach (($smp['s'] ?? []) as $k => $v) { if ((int) $v !== SEV_NA) { $everReal[$k] = true; } }
+  }
   $panes = [];
   foreach ($REPO_GROUPS as $gkey => [$gname, $gdek]) {
       foreach ($repos as $r) {
           if ($r['group'] !== $gkey) { continue; }
           $pl = [];
           foreach (array_keys($PLATFORMS) as $plat) {
-              if (isset($seenKeys[$r['name'] . '.' . $plat])) { $pl[] = $plat; }
+              if (isset($everReal[$r['name'] . '.' . $plat])) { $pl[] = $plat; }
           }
           if ($pl) { $panes[$r['name']] = ['group' => $gname, 'plats' => $pl]; }
       }
@@ -1687,6 +1703,13 @@ function cell_chip(?int $sev, string $repo, array $running): string
       // A session that expired returns the sign-in page, which has no
       // data-live regions at all. Reloading is right THEN, and only then.
       if (!doc.querySelector('[data-live]')) { location.reload(); return; }
+      // A NEW DEPLOY reloads the tab. The poller patches data-live regions,
+      // which covers data moving — it cannot cover the page itself changing
+      // shape, and an open tab was quietly missing every new control until
+      // somebody thought to refresh.
+      const freshVer = (doc.querySelector('.page') || { dataset: {} }).dataset.pageVer;
+      const hereVer = (document.querySelector('.page') || { dataset: {} }).dataset.pageVer;
+      if (freshVer && hereVer && freshVer !== hereVer) { location.reload(); return; }
       applyLive(doc);
       liveFails = 0;
       const stamp = document.getElementById('live-stamp');

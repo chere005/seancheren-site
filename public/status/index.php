@@ -474,6 +474,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   tbody tr.outside .repo-name { color: var(--ink-soft); }
 
   .cell-note { display: block; margin-top: 5px; font-size: 0.74rem; color: var(--ink-faint); line-height: 1.45; }
+  .cell-note .nowrap { white-space: nowrap; }
   .cell-note br { content: ""; display: block; margin-top: 1px; }
 
   /* The legend used to reuse .chip with an &nbsp; inside, which made every
@@ -1372,7 +1373,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
                   $lg = $results['scopes'][$sk] ?? null; ?>
                   <div data-sort="<?= $lg === null ? 2 : (['ok' => 1, 'failed' => 3, 'skipped' => 2][$lg['state']] ?? 2) ?>"><?php
                     if ($lg === null)                  { echo '<span class="scope-chip">not probed</span>'; }
-                    elseif ($lg['state'] === 'ok')     { echo '<span class="chip live" title="' . e($lg['why']) . '">works</span>'; }
+                    elseif ($lg['state'] === 'ok')     { echo '<span class="chip live" title="' . e($lg['why']) . '">live</span>'; }
                     elseif ($lg['state'] === 'failed') { echo '<span class="chip crit" title="' . e($lg['why']) . '">BROKEN</span>'; }
                     else { echo '<span class="chip partial" title="' . e($lg['why']) . '">not probed</span>'; }
                   ?></div>
@@ -1403,7 +1404,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   <div class="legend">
     <div class="legend-item"><span class="swatch live"></span> <strong>up</strong> — answered; 401 counts</div>
     <div class="legend-item"><span class="swatch crit"></span> <strong>down</strong> — no answer</div>
-    <div class="legend-item"><span class="swatch live"></span> <strong>works</strong> — a probe account signed in</div>
+    <div class="legend-item"><span class="swatch live"></span> <strong>live</strong> — a probe account signed in</div>
     <div class="legend-item"><span class="swatch crit"></span> <strong>BROKEN</strong> — up, nobody can get in</div>
     <div class="legend-item"><span class="swatch partial"></span> <strong>not probed</strong> — no credentials in <code>lib/config.php</code></div>
   </div>
@@ -1448,6 +1449,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
     <?php endforeach; ?>
   </div>
 
+  <div data-live="usage-tables">
   <?php foreach ($laneName as $lk => $ln):
     $rows = array_filter($usage['people'], fn($p) => $p['lane'] === $lk); ?>
     <div class="table-card">
@@ -1483,6 +1485,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
       <?php endif; ?>
     </div>
   <?php endforeach; ?>
+
+  </div>
 
   <?php // REQUESTS PER MINUTE, one line per account. The window picker changes
         // the bucket as well as the span, and the rate is divided back out, so

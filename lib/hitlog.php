@@ -77,6 +77,28 @@ function hit_app(): string
 }
 
 /**
+ * IS THIS A ROBOT, and specifically is it Claude's — Sean, 2026-08-23:
+ * "separate all your traffic and make it called claudio in usage".
+ *
+ * Agent traffic is real traffic and belongs in the log, but counting a session
+ * of shell probes as "somebody visited the site" makes every other number
+ * meaningless. So it gets its own lane.
+ *
+ * A BOOLEAN, NOT THE USER AGENT. This file says out loud that it stores no
+ * user agent, and it still does not: the string is tested and thrown away, and
+ * what reaches disk is one of two tokens. The explicit header is the reliable
+ * signal; the command-line clients are the fallback for a request that forgot
+ * to send it. Browser-shaped agents never match, so a real visitor cannot be
+ * filed here by accident.
+ */
+function hit_agent(): string
+{
+    if (!empty($_SERVER['HTTP_X_CLAUDIO'])) { return 'claudio'; }
+    $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+    return preg_match('#^(curl|Wget|python-requests|HTTPie|node-fetch|Go-http-client)/#i', $ua) ? 'claudio' : '-';
+}
+
+/**
  * Append one hit. Safe to call from anywhere, cheap, and never fatal: a log
  * that cannot be written must not take a page down with it.
  *
@@ -114,6 +136,7 @@ function hit_log(?string $app = null, ?string $user = null): void
         $clean($app ?? hit_app()),
         $clean($method),
         $clean($who ?? '-'),
+        hit_agent(),
     ]) . "\n";
     @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
     // Group-readable, like usage.log: the dir belongs to the web user and the
@@ -170,6 +193,9 @@ function hit_counts(array $windows): array
  */
 function hit_lane(array $row): string
 {
+    // Claude's traffic first, whichever instance it hit: "separate ALL your
+    // traffic" means the sandbox runs count as its own too.
+    if (($row['agent'] ?? '-') === 'claudio') { return 'claudio'; }
     if (($row['instance'] ?? 'prod') !== 'prod') { return 'test'; }
     return ($row['user'] ?? '-') === 'sean' ? 'sean' : 'other';
 }
@@ -213,10 +239,10 @@ function hit_usage(): array
     $rows = hit_tail_since($now - max(array_column($wins, 'secs')), 8 * 1024 * 1024);
 
     $people = [];
-    $lanes  = ['sean' => [], 'other' => [], 'test' => []];
+    $lanes  = ['sean' => [], 'other' => [], 'claudio' => [], 'test' => []];
     $series = [];
     foreach ($wins as $wk => $w) {
-        $lanes['sean'][$wk] = $lanes['other'][$wk] = $lanes['test'][$wk] = 0;
+        foreach (array_keys($lanes) as $lk) { $lanes[$lk][$wk] = 0; }
     }
 
     foreach ($rows as $r) {
@@ -285,7 +311,10 @@ function hit_tail_since(int $since, int $bytes = 1024 * 1024): array
             if (count($f) < 5) { continue; }
             $ts = (int) $f[0];
             if ($ts < $since) { $reached = true; break; }
-            $rows[] = ['ts' => $ts, 'instance' => $f[1], 'app' => $f[2], 'method' => $f[3], 'user' => $f[4]];
+            // Lines written before the agent field exists are five long and
+            // read as human, which is what they were.
+            $rows[] = ['ts' => $ts, 'instance' => $f[1], 'app' => $f[2], 'method' => $f[3],
+                       'user' => $f[4], 'agent' => $f[5] ?? '-'];
         }
         // The live file went back far enough; the rotated one cannot add
         // anything newer than its first line.

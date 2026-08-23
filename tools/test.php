@@ -1354,7 +1354,7 @@ t('a page view writes one line, and it holds no address and no path', function (
     $lines = array_values(array_filter(explode("\n", trim($b))));
     eq(2, count($lines), 'one line per page view');
     foreach ($lines as $l) {
-        eq(5, count(explode("\t", $l)), 'five fields: time, instance, app, method, user');
+        eq(6, count(explode("\t", $l)), 'six fields: time, instance, app, method, user, agent');
     }
     // The NEGATIVE is the promise. usage.log carries IPs for the security
     // question; this one answers "how busy is it" and must not become a
@@ -1384,8 +1384,26 @@ t('a signed-in view names the user; a public one does not', function () {
     $jar = login('example', 'examplepassword');
     req('GET', '/akisthemes/', [], $jar);
     $b = (string) @file_get_contents($log);
-    has("\thome\tGET\t-\n", str_replace("\tabout\t", "\thome\t", $b), 'a public page logs no user');
-    has("\texample\n", $b, 'a signed-in page names who');
+    has("\thome\tGET\t-\t", str_replace("\tabout\t", "\thome\t", $b), 'a public page logs no user');
+    has("\texample\t", $b, 'a signed-in page names who');
+});
+
+t('an agent names itself; a browser is never filed as one', function () {
+    // Sean, 2026-08-23: "separate all your traffic and make it called claudio
+    // in usage". The lane is only useful if it cannot swallow a real visitor,
+    // so the negative half is the half worth testing.
+    $log = datadir() . '/hits.log';
+    @unlink($log);
+    req('GET', '/about/', [], $jar, false, ['X-Claudio: 1']);
+    req('GET', '/about/', [], $jar, false, ['User-Agent: curl/8.7.1']);
+    req('GET', '/about/', [], $jar, false,
+        ['User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36']);
+    $lines = array_values(array_filter(explode("\n", trim((string) @file_get_contents($log)))));
+    eq(3, count($lines), 'all three are logged');
+    $agent = function (string $line): string { $f = explode("\t", $line); return (string) end($f); };
+    eq('claudio', $agent($lines[0]), 'the header wins');
+    eq('claudio', $agent($lines[1]), 'a command-line client is caught without it');
+    eq('-', $agent($lines[2]), 'a browser is not');
 });
 
 t('hit_counts only counts inside its window', function () {
@@ -1393,7 +1411,7 @@ t('hit_counts only counts inside its window', function () {
     $old = time() - 7 * 86400;
     file_put_contents($log, implode("\n", [
         "$old\tprod\tabout\tGET\t-",
-        (time() - 30) . "\tprod\tabout\tGET\t-",
+        (time() - 30) . "\tprod\tabout\tGET\t-\t-",
         (time() - 30) . "\tprod\tchat\tGET\tsomebody",
     ]) . "\n");
     $c = hit_counts(['hour' => 3600, 'week' => 8 * 86400]);

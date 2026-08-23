@@ -598,6 +598,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .usage-table .zero { color: var(--ink-faint); }
   .usage-table .soft { color: var(--ink-faint); font-size: 0.78rem; }
   .usage-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 9px; flex: none; }
+  .usage-dot.in  { background: var(--live); }
+  .usage-dot.out { background: var(--partial); }
   .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
 
   .win-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -943,7 +945,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         const repo  = card.dataset.repo;
         const plats = [...card.querySelectorAll('.repo-pick input[data-plat]:checked')].map(i => i.dataset.plat);
 
-        const W = 900, H = 210, padL = 108, padR = 18, padT = 18, padB = 22;
+        const W = 900, H = 210, padL = 108, padR = 18, padT = 18, padB = 38;
         const t0 = SAMPLES[0].t, t1 = Math.max(SAMPLES[SAMPLES.length - 1].u, t0 + 60);
         const x = (t) => padL + ((t - t0) / (t1 - t0)) * (W - padL - padR);
         const y = (sev) => padT + (BAND_AT[sev] / (BANDS.length - 1)) * (H - padT - padB);
@@ -956,7 +958,26 @@ function cell_chip(?int $sev, string $repo, array $running): string
                  '" text-anchor="end" font-size="11" fill="' + b.color + '" opacity="0.85">' + b.label + '</text>';
         });
 
-        const key = document.createElement('div');
+        /**
+         * A TIME AXIS, drawn on the chart — Sean, 2026-08-23: "x axis should
+         * show timestamps". The span used to be reported as two numbers below
+         * the picture, which told you where it started and stopped and nothing
+         * about where anything in the middle sat. Ticks put every dot on a
+         * clock.
+         *
+         * Under a day it is times only; past that a date is needed or two
+         * different Tuesdays read alike.
+         */
+        const axisFmt = (t1 - t0) <= 86400 ? fmtT : fmtF;
+        const TICKS = 5;
+        for (let i = 0; i < TICKS; i++) {
+          const tt = t0 + (t1 - t0) * (i / (TICKS - 1)), tx = x(tt);
+          out += '<line x1="' + tx + '" y1="' + (H - padB + 5) + '" x2="' + tx + '" y2="' + (H - padB + 10) +
+                 '" stroke="var(--line)" stroke-width="1"/>' +
+                 '<text x="' + tx + '" y="' + (H - padB + 24) + '" text-anchor="' +
+                 (i === 0 ? 'start' : i === TICKS - 1 ? 'end' : 'middle') +
+                 '" font-size="10" fill="var(--ink-faint)">' + axisFmt(tt) + '</text>';
+        }
 
         // Only the samples that say anything about this repo's chosen platforms.
         const mine = SAMPLES.filter(s => plats.some(p => (repo + '.' + p) in s.s));
@@ -1028,15 +1049,20 @@ function cell_chip(?int $sev, string $repo, array $running): string
         // — the ones that moved and the ones that did not.
         let events = 0;
         groupsAt.forEach((g, i) => {
+          // EVERY PING GETS ITS SET OF CIRCLES — Sean, 2026-08-23: "a set of
+          // circles should be there for every event that was pinged". A sample
+          // is written whenever ANY repo's state moves, so a chart that only
+          // dotted its own repo's changes went blank through events it was
+          // present for. Reading across two charts then meant guessing whether
+          // the gap was "unchanged" or "unrecorded".
           const anyMove = i > 0 && Object.keys(at[i]).some(p => at[i - 1][p] !== undefined && at[i - 1][p] !== at[i][p]);
-          if (i > 0 && !anyMove) { return; }
-          if (i > 0) { events++; }
+          if (anyMove) { events++; }
           const cx = x(mine[i].t);
           Object.keys(g).forEach((sevStr) => {
             const sev = +sevStr, members = g[sevStr], c = colorOf[gkey(members)];
             const R = members.length > 1 ? 6.5 : 5;
             const names = members.map(p => PLATFORMS[p]).join(', ');
-            const tip = names + '\n' + SEV_LABEL[sev] + ' from ' + fmtF(mine[i].t) +
+            const tip = names + '\n' + SEV_LABEL[sev] + '\nchecked ' + fmtF(mine[i].t) +
                         (i === 0 ? '\n(first recorded)' : '');
             out += '<circle cx="' + cx + '" cy="' + y(sev) + '" r="' + R + '" fill="' + c +
                    '" stroke="var(--surface)" stroke-width="1.5"><title>' + tip + '</title></circle>';
@@ -1044,8 +1070,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
         });
 
         svg.innerHTML = out;
-        card.querySelector('.ax-from').textContent = fmtT(t0);
-        card.querySelector('.ax-to').textContent = fmtT(t1);
+        card.querySelector('.ax-from').textContent = '';
+        card.querySelector('.ax-to').textContent = mine.length + (mine.length === 1 ? ' check' : ' checks');
         card.querySelector('.ax-mid').textContent =
           events === 0 ? 'no changes' : events + (events === 1 ? ' change' : ' changes');
 
@@ -1203,20 +1229,18 @@ function cell_chip(?int $sev, string $repo, array $running): string
    */
   $usage = hit_usage();
   $uw = $usage['windows'];
-  $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'test' => 'Tests'];
+  $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'claudio' => 'Claudio', 'test' => 'Tests'];
   $laneDek  = [
-      'sean'  => 'production, signed in as sean',
-      'other' => 'production, anybody else — signed in or not',
-      'test'  => 'the test.seancheren.com sandbox',
+      'sean'    => 'production, signed in as sean',
+      'other'   => 'production, anybody else — signed in or not',
+      'claudio' => "Claude's own requests, either instance",
+      'test'    => 'the test.seancheren.com sandbox',
   ];
   ?>
 
-  <?php // HOW FAR BACK THE LOG ACTUALLY GOES. It rotates once at 4 MB and the
-        // rotated copy is dropped on the next rotation, so the year column can
-        // be reporting on a fortnight. Saying so is the difference between a
-        // quiet year and a short log. ?>
-  <p class="dek">Log starts <strong><?= $usage['oldest'] ? e(ctFull($usage['oldest'])) : '&mdash;' ?></strong><?php
-    if ($usage['oldest'] && $usage['oldest'] > $usage['from']): ?> &middot; longer windows are capped by that<?php endif; ?></p>
+  <?php // The log rotates once at 4 MB, so a long window can be reporting on a
+        // short log. The start date is the whole of that caveat. ?>
+  <p class="dek">Log starts <strong><?= $usage['oldest'] ? e(ctFull($usage['oldest'])) : '&mdash;' ?></strong></p>
 
   <div class="kpis" style="margin-bottom:6px">
     <?php foreach ($laneName as $lk => $ln): ?>
@@ -1249,7 +1273,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
           <tbody>
             <?php foreach ($rows as $rk => $p): ?>
               <tr>
-                <td><span class="usage-dot" data-key="<?= e($rk) ?>"></span><span class="repo-name"><?= e($p['name']) ?></span></td>
+                <td><span class="usage-dot <?= $p['name'] === '(signed out)' ? 'out' : 'in' ?>"></span><span class="repo-name"><?= e($p['name']) ?></span></td>
                 <?php foreach (array_keys($uw) as $wk): ?>
                   <td class="num<?= $p['counts'][$wk] ? '' : ' zero' ?>"><?= number_format($p['counts'][$wk]) ?></td>
                 <?php endforeach; ?>
@@ -1292,7 +1316,6 @@ function cell_chip(?int $sev, string $repo, array $running): string
     const USAGE_COLORS = ['#5fb6ac','#f0b429','#8fa3e0','#d98cc0','#9ad17a','#e08a5f','#c58ef0','#6fd0d8','#e2725b','#b9c86a'];
     const UCOLOR = {};
     Object.keys(USAGE.people).forEach((k, i) => { UCOLOR[k] = USAGE_COLORS[i % USAGE_COLORS.length]; });
-    document.querySelectorAll('.usage-dot').forEach(d => { d.style.background = UCOLOR[d.dataset.key] || 'var(--none)'; });
 
     function drawUsage() {
       const card = document.getElementById('usage-chart');

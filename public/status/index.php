@@ -101,47 +101,63 @@ $REPO_GROUPS = [
     'website'    => ['Website', 'What is served from the seancheren.com account, suite or not.'],
 ];
 
-/** [severity, label, note] — note optional. */
+/**
+ * [severity, label, note] — note optional.
+ *
+ * ONE SHAPE PER CELL: the label says WHAT it is, the note says WHERE. Sean,
+ * 2026-08-23, of a macOS cell that ran to three lines of caveat: it "should
+ * just say Mac Catalyst.. why doesn't it have a location like the others?" A
+ * matrix is read across, and a cell answering a different question from the
+ * one beside it cannot be.
+ *
+ * States, weakest to strongest: `builds` (it compiles), `installed` (it is on
+ * the machine), `verified` (on the machine and seen running). They are not
+ * synonyms — every cell claiming `verified` has actually been launched.
+ *
+ * Caveats do not live in cells. The ReactNativeDependencies repair behind
+ * MyCalMind's Catalyst build is real and is written where somebody can act on
+ * it — CoreMind's AGENTS.md — not in a cell that has to be read forty times.
+ */
 $repos = [
   ['name' => 'CalMind', 'group' => 'mindsuite', 'tag' => 'origin app',
    'sync' => '<code>seancheren.com/CalMind/api</code> — every client syncs through it. Also on <code>test.</code> and <code>dev.</code>',
    'plat' => [
      'web'     => [0, 'seancheren.com/CalMind'],
-     'macos'   => [0, 'Tauri desktop'],
-     'windows' => [0, 'CI build'],
-     'ios'     => [0, 'on phone', '1 of 3 device slots'],
-     'watchos' => [0, 'CalMindWatch', 'installs to paired watch'],
-     'android' => [0, 'installs &amp; runs'],
+     'macos'   => [0, 'Tauri desktop', '/Applications'],
+     'windows' => [0, 'CI build', 'GitHub Actions artifact'],
+     'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
+     'watchos' => [0, 'verified', 'paired Apple Watch'],
+     'android' => [0, 'verified', 'local emulator'],
    ]],
   ['name' => 'ChefMind', 'group' => 'mindsuite', 'tag' => 'split from CalMind',
    'sync' => '<code>seancheren.com/CalMind/api</code>, <code>chef</code> space. No backend of its own.',
    'plat' => [
      'web'     => [0, 'seancheren.com/ChefMind'],
-     'macos'   => [0, 'installed', '/Applications, verified launching'],
-     'windows' => [0, 'CI build'],
-     'ios'     => [0, 'on phone', '1 of 3 — reinstalled 08-22'],
+     'macos'   => [0, 'Tauri desktop', '/Applications'],
+     'windows' => [0, 'CI build', 'GitHub Actions artifact'],
+     'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
      'watchos' => [null, '&mdash;', 'no watch target'],
-     'android' => [0, 'installs &amp; runs'],
+     'android' => [0, 'verified', 'local emulator'],
    ]],
   ['name' => 'AcctMind', 'group' => 'mindsuite', 'tag' => 'separate build',
    'sync' => '<code>seancheren.com/AcctMind</code>, and <code>test.seancheren.com/AcctMind</code>.',
    'plat' => [
      'web'     => [0, 'seancheren.com/AcctMind'],
-     'macos'   => [0, 'installed', '/Applications, verified launching'],
-     'windows' => [0, 'CI build'],
-     'ios'     => [0, 'on phone', '1 of 3 slots'],
+     'macos'   => [0, 'Tauri desktop', '/Applications'],
+     'windows' => [0, 'CI build', 'GitHub Actions artifact'],
+     'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
      'watchos' => [null, '&mdash;', 'no watch target'],
-     'android' => [0, 'installs &amp; runs'],
+     'android' => [0, 'verified', 'local emulator'],
    ]],
   ['name' => 'MyCalMind', 'group' => 'mindsuite', 'tag' => 'extracted, renamed',
    'sync' => 'Bonjour over the LAN, <code>_calmind-local._tcp</code>. No internet, no backup — the device is the only copy.',
    'plat' => [
      'web'     => [null, 'none'],
-     'macos'   => [0, 'installed', 'real Mac Catalyst app, verified running — the ReactNativeDependencies bundle repair is re-applied every build, never fixed upstream'],
+     'macos'   => [0, 'Mac Catalyst', '/Applications'],
      'windows' => [null, '&mdash;', 'no Tauri shell'],
-     'ios'     => [1, 'build-only', "deliberate — protects the phone's 3-app cap"],
-     'watchos' => [1, 'builds', 'CalMindWatch product — not installed to a watch'],
-     'android' => [0, 'installs &amp; runs'],
+     'ios'     => [1, 'builds', "not installed — protects the phone's 3-app cap"],
+     'watchos' => [1, 'builds', 'not installed to a watch'],
+     'android' => [0, 'verified', 'local emulator'],
    ]],
   ['name' => 'CoreMind', 'group' => 'mindsuite', 'tag' => 'shared tooling',
    'sync' => 'None. Distributes source into the other four repos; ships no app, holds no data.',
@@ -342,7 +358,7 @@ function check_url(string $url, ?string $post = null): array
  *
  *   'status_probes' => [
  *     'calmind'  => ['user' => '…', 'pass' => '…'],   // CalMind's API
- *     'acctmind' => ['user' => '…', 'pass' => '…'],   // AcctMind, HTTP Basic
+ *     'acctmind' => ['user' => '…', 'pass' => '…'],   // AcctMind's browser password box
  *     'site'     => ['user' => '…', 'pass' => '…'],   // this site's own login
  *   ],
  *
@@ -447,22 +463,22 @@ $endpoints = [
     'mindsuite' => [
         'seancheren.com' => [
             ['label' => 'CalMind',    'app' => 'CalMind',  'url' => 'https://seancheren.com/CalMind/',
-             'scope' => 'CalMind accounts', 'scope_key' => 'calmind', 'auth' => "CalMind's own accounts — bearer token or passkey, never this site's login"],
+             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "CalMind's own accounts — bearer token or passkey, never this site's login"],
             ['label' => 'CalMind API', 'app' => 'CalMind', 'url' => 'https://seancheren.com/CalMind/api/index.php',
-             'scope' => 'CalMind accounts', 'scope_key' => 'calmind',
+             'scope' => 'CalMind', 'scope_key' => 'calmind',
              'post' => '{"action":"spaces"}',
              'auth' => "CalMind's own bearer token on every action except this one — `spaces` answers without auth, which is what makes it safe to probe from here"],
             ['label' => 'ChefMind',   'app' => 'ChefMind', 'url' => 'https://seancheren.com/ChefMind/',
-             'scope' => 'CalMind accounts (borrowed)', 'scope_key' => 'calmind', 'auth' => "Delegated — no backend of its own; signs in through CalMind's API, same users and tokens, in the dedicated \"chef\" sync space"],
+             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Delegated — no backend of its own; signs in through CalMind's API, same users and tokens, in the dedicated \"chef\" sync space"],
             ['label' => 'AcctMind',   'app' => 'AcctMind', 'url' => 'https://seancheren.com/AcctMind/',
-             'scope' => 'AcctMind accounts &middot; HTTP Basic', 'scope_key' => 'acctmind',
-             'auth' => "AcctMind's own, separate account system, behind HTTP Basic"],
+             'scope' => 'AcctMind &middot; browser password box', 'scope_key' => 'acctmind',
+             'auth' => "AcctMind's own accounts. The web server asks for them itself, in the browser's built-in password box, before the app is reached"],
         ],
         'test.seancheren.com' => [
             ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://test.seancheren.com/CalMind/',
-             'scope' => 'CalMind accounts (test store)', 'scope_key' => 'calmind', 'auth' => "CalMind's own accounts, test instance — its own data, its own store"],
+             'scope' => 'CalMind &middot; test store', 'scope_key' => 'calmind', 'auth' => "CalMind's own accounts, test instance — its own data, its own store"],
             ['label' => 'AcctMind', 'app' => 'AcctMind', 'url' => 'https://test.seancheren.com/AcctMind/',
-             'scope' => 'AcctMind accounts &middot; HTTP Basic', 'scope_key' => 'acctmind', 'auth' => "AcctMind's own accounts, test instance, behind HTTP Basic"],
+             'scope' => 'AcctMind &middot; browser password box', 'scope_key' => 'acctmind', 'auth' => "AcctMind's own accounts, test instance — same browser password box"],
         ],
     ],
     'site' => [
@@ -471,17 +487,17 @@ $endpoints = [
             ['label' => 'About',           'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/about/',        'auth' => 'Public — no login'],
             ['label' => 'Contact',         'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/contact/',      'auth' => 'Public — no login'],
             ['label' => 'Projects',        'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/projects/',     'auth' => 'Public — no login'],
-            ['label' => 'Theme picker',    'app' => 'site', 'scope' => 'public &middot; sets a cookie', 'scope_key' => 'public', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public — sets a cookie, no login'],
-            ['label' => 'Chat',            'app' => 'site', 'scope' => 'public &middot; deliberately none', 'scope_key' => 'public', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public — deliberately no login (see chat/index.php)'],
-            ["label" => "Aki's Bookshelf", 'app' => 'site', 'scope' => 'site login &rarr; aki only', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisbookshelf/',
+            ['label' => 'Theme picker',    'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public — sets a cookie, no login'],
+            ['label' => 'Chat',            'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public — deliberately no login (see chat/index.php)'],
+            ["label" => "Aki's Bookshelf", 'app' => 'site', 'scope' => 'site login &middot; aki only', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisbookshelf/',
              'auth' => "Site login (lib/auth.php), then gated to the 'aki' account only"],
             ['label' => 'Themes bench',    'app' => 'site', 'scope' => 'site login', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Site login (lib/auth.php); no per-account gate'],
-            ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/', 'scope' => 'site login &rarr; sean only', 'scope_key' => 'site',       'auth' => "Site login (lib/auth.php), then gated to the 'sean' account only"],
+            ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/', 'scope' => 'site login &middot; sean only', 'scope_key' => 'site',       'auth' => "Site login (lib/auth.php), then gated to the 'sean' account only"],
             ['label' => "Aki's Tarot",     'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/akitarot/',     'auth' => 'Public — no login. Deployed from the private aki-tarot repo, not from seancheren-site'],
         ],
         'test.seancheren.com' => [
-            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope' => 'public &middot; sandbox', 'scope_key' => 'public',       'auth' => 'Public — the sandbox mirror, its own data dir'],
-            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope' => 'sandbox login &rarr; sean only', 'scope_key' => 'site', 'auth' => "Sandbox login (lib-test), then the 'sean' gate"],
+            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope' => 'public', 'scope_key' => 'public',       'auth' => 'Public — the sandbox mirror, its own data dir'],
+            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope' => 'sandbox login &middot; sean only', 'scope_key' => 'site', 'auth' => "Sandbox login (lib-test), then the 'sean' gate"],
         ],
     ],
 ];
@@ -765,6 +781,10 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
   /* ---------- table ---------- */
 
   .table-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  /* Sean, 2026-08-23: "there's no padding on the left or right of the page..
+     give at least like 10 px". The page's own padding collapsed to nothing at
+     phone widths and the cards sat flush against the viewport edge. */
+  .page { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   .table-scroll { overflow-x: auto; }
 
   table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1180px; }
@@ -934,7 +954,7 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
   .endpoint-ms { font-family: var(--font-mono); color: var(--ink-faint); font-size: 0.78rem; }
 
   @media (max-width: 640px) {
-    .page { padding: 16px 18px 56px; }
+    .page { padding: 16px 12px 56px; }
     .endpoint-row { grid-template-columns: 1fr; gap: 6px; }
     .endpoint-head { display: none; }
     .graph-head { flex-direction: column; align-items: flex-start; }

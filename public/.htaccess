@@ -153,6 +153,15 @@ RewriteRule ^ - [R=404,L]
 # single worst thing that can appear in a docroot, and the rule is free.
 <FilesMatch "(^\.|\.(swp|swo|swn|bak|orig|rej|save|old|tmp|log|sql|ini|sh|conf)$|~$)">
   Require all denied
+  # …and never cacheable. Denying it at the origin was not enough: the edge
+  # kept serving the swap file's old 200 for the bare URL long after the file
+  # was gone (a query string bypassed the cache and correctly got 403). A
+  # stray file that appears for even a minute must not then be served from a
+  # cache for hours. IfModule because this host answers an unknown directive
+  # with a hard 500 for the whole site.
+  <IfModule mod_headers.c>
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+  </IfModule>
 </FilesMatch>
 # …except the one dotted path that MUST be served: ACME lives there, and a
 # blocked .well-known means the certificate stops renewing and the whole site

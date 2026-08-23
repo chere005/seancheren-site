@@ -1378,7 +1378,7 @@ t('the log file lives outside the web root and is plain text', function () {
 // its own header; this is the test that it still keeps them.
 area('hits');
 
-t('a page view writes one line, and it holds no address and no path', function () {
+t('a page view writes one line, with the address and no path', function () {
     $log = datadir() . '/hits.log';
     @unlink($log);
     req('GET', '/about/');
@@ -1387,12 +1387,12 @@ t('a page view writes one line, and it holds no address and no path', function (
     $lines = array_values(array_filter(explode("\n", trim($b))));
     eq(2, count($lines), 'one line per page view');
     foreach ($lines as $l) {
-        eq(6, count(explode("\t", $l)), 'six fields: time, instance, app, method, user, agent');
+        eq(7, count(explode("\t", $l)), 'seven fields: time, instance, app, method, user, agent, ip');
     }
-    // The NEGATIVE is the promise. usage.log carries IPs for the security
-    // question; this one answers "how busy is it" and must not become a
-    // second copy of that.
-    hasnt('127.0.0.1', $b, 'no IP address');
+    // The address IS kept, on Sean's instruction (2026-08-23). What stays out
+    // is the PATH and everything hanging off it — the difference between "how
+    // busy is this" and "who went where" is still the point of the file.
+    has('127.0.0.1', $b, 'the client address is recorded');
     hasnt('utm', $b, 'no query string');
     hasnt('/projects/', $b, 'no path — the app name only');
     has("\tabout\t", $b, 'the app is the first path segment');
@@ -1453,7 +1453,8 @@ t('an agent names itself; a browser is never filed as one', function () {
         ['User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36']);
     $lines = array_values(array_filter(explode("\n", trim((string) @file_get_contents($log)))));
     eq(3, count($lines), 'all three are logged');
-    $agent = function (string $line): string { $f = explode("\t", $line); return (string) end($f); };
+    // Field 6 of 7 — the address follows it, so "last" stopped being the agent.
+    $agent = function (string $line): string { $f = explode("\t", $line); return (string) ($f[5] ?? ''); };
     eq('claudio', $agent($lines[0]), 'the header wins');
     eq('claudio', $agent($lines[1]), 'a command-line client is caught without it');
     eq('-', $agent($lines[2]), 'a browser is not');

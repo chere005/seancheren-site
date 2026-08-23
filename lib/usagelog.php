@@ -10,6 +10,8 @@
  */
 
 /** Append one usage line. $user overrides the session's (for login attempts). */
+require_once __DIR__ . '/hitlog.php';   // hit_ip(), the one address helper
+
 function usage_log(string $action, ?string $user = null): void
 {
     $cfg = app_config();
@@ -25,7 +27,12 @@ function usage_log(string $action, ?string $user = null): void
     $clean = fn($v) => substr(preg_replace('/[^\w.@:\/-]/', '_', (string) $v), 0, 64) ?: '-';
     $line = implode("\t", [
         date('c'),
-        $clean($_SERVER['REMOTE_ADDR'] ?? '-'),
+        // REMOTE_ADDR is the LOAD BALANCER on this host, identical for every
+        // visitor on the internet — this field recorded the same address for
+        // everyone since the day it was written. hit_ip() prefers the
+        // forwarded client address, which is the one worth keeping (Sean,
+        // 2026-08-23: "make sure all logging stores ip").
+        $clean(function_exists('hit_ip') ? hit_ip() : ($_SERVER['REMOTE_ADDR'] ?? '-')),
         $clean($user ?? (current_user() ?? '-')),
         $clean(usage_app()),
         $clean($action),

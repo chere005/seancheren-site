@@ -148,6 +148,11 @@ require_once $__libDir . '/statuscheck.php';
 require_once $__libDir . '/hitlog.php';
 $hitWindows = ['the last hour' => 3600, 'the last 12 hours' => 12 * 3600, 'the last 3 days' => 3 * 86400];
 $hits = hit_counts($hitWindows);
+// Computed BEFORE the header, because the app picker up there is built from
+// the apps this log actually holds. The roster is the site's own account
+// store; CalMind's users live behind a key this page cannot read, so they
+// appear only once they have visited.
+$USAGE_DATA = hit_usage(array_keys(app_users(app_config())));
 
 // ------------------------------------------------------------- the headline
 /**
@@ -408,6 +413,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
   /* ---------- table ---------- */
 
   .table-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .table-card .sec-head { border-top: 1px solid var(--line); }
+  .table-card .sec:first-of-type .sec-head { border-top: none; }
   .table-card th[data-sort-col] { cursor: pointer; }
   .table-card th[data-sort-col]::after { content: " \2195"; opacity: 0.35; }
   .table-card th.sorted-asc::after { content: " \2191"; opacity: 1; }
@@ -654,6 +661,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .usage-dot.in  { background: var(--live); }
   .usage-dot.out { background: var(--partial); }
   .usage-dot.never { background: transparent; border: 1.5px solid var(--ink-faint); }
+  .who-ip { display: block; margin-top: 3px; font-family: var(--font-mono); font-size: 0.66rem; color: var(--ink-faint); }
+  .usage-legend { border-top: none; border-radius: 12px; }
+  .app-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .app-n { margin-left: 7px; font-family: var(--font-mono); font-size: 0.66rem; opacity: 0.7; }
+  tr.app-zero { opacity: 0.4; }
   .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
 
   .tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
@@ -777,6 +789,18 @@ function cell_chip(?int $sev, string $repo, array $running): string
     <?php endforeach; ?>
   </div>
   </div>
+  <?php // WHICH APP the Usage numbers are about — Sean, 2026-08-23: "usage
+        // should be split by app or website .. put selector buttons for what
+        // usage is being tracked below the seancheren.com, test.seancheren.com
+        // etc buttons". Only meaningful on Usage, so it shows with that tab. ?>
+  <div class="app-pick" id="app-pick" hidden>
+    <button class="inst-tab on" data-app="*">All apps</button>
+    <?php // $USAGE_DATA, not $usage — the Usage tab assigns $usage further down
+          // the page, so up here it was undefined and this list came out empty. ?>
+    <?php foreach (($USAGE_DATA['apps'] ?? []) as $appName => $c): ?>
+      <button class="inst-tab" data-app="<?= e($appName) ?>"><?= e($appName) ?><span class="app-n"><?= (int) ($c['3d'] ?? 0) ?></span></button>
+    <?php endforeach; ?>
+  </div>
 
   <!-- ============================================================ CURRENT -->
   <div class="tab-panel active" id="tab-current">
@@ -805,11 +829,32 @@ function cell_chip(?int $sev, string $repo, array $running): string
     $rows = array_values(array_filter($repos, fn($r) => $r['group'] === $gkey));
     if (!$rows) { continue; }
   ?>
+  <?php
+  /**
+   * DEPLOYED vs NOT — Sean, 2026-08-23: "split deployed and not deployed apps
+   * by a subsection in the mindsuite current page". A repo that serves a URL
+   * and one that ships nothing to a server are different kinds of thing, and
+   * reading CoreMind's row of n/a beside CalMind's live one invited the
+   * question every time. "Deployed" here means exactly what the Web / server
+   * column measures on the SELECTED instance: a URL this page probes.
+   */
+  $split = ['Deployed' => [], 'Not deployed' => []];
+  foreach ($rows as $r) {
+      $anyWeb = false;
+      foreach ($WEB_INSTANCES as $inst => $host) {
+          if (!empty($WEB_PROBE_AT[$inst][$r['name']])) { $anyWeb = true; break; }
+      }
+      $split[$anyWeb ? 'Deployed' : 'Not deployed'][] = $r;
+  }
+  ?>
   <div class="table-card">
     <div class="group-head">
       <h2><?= e($gname) ?></h2>
       <p><?= e($gdek) ?></p>
     </div>
+    <?php foreach ($split as $subName => $subRows): if (!$subRows) { continue; } ?>
+    <div class="sec">
+      <div class="sec-head"><?= e($subName) ?><span class="sec-count"><?= count($subRows) ?></span></div>
     <div class="table-scroll">
       <table>
         <colgroup>
@@ -827,7 +872,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
           </tr>
         </thead>
         <tbody>
-          <?php foreach ($rows as $r): ?>
+          <?php foreach ($subRows as $r): ?>
             <tr data-live="repo:<?= e($r['name']) ?>"<?= $gkey === 'mindsuite' ? '' : ' class="outside"' ?>>
               <td>
                 <span class="repo-name"><?= e($r['name']) ?></span>
@@ -875,6 +920,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
         </tbody>
       </table>
     </div>
+    </div>
+    <?php endforeach; ?>
     <?php if ($gkey === 'mindsuite'): ?>
     <div class="legend">
       <?php // ONE vocabulary for the whole page — the same five words the
@@ -1162,6 +1209,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
          * different Tuesdays read alike.
          */
         const axisFmt = (t1 - t0) <= 86400 ? fmtT : fmtF;
+        out += '<text x="' + ((padL + W - padR) / 2) + '" y="' + (H - 2) +
+               '" text-anchor="middle" font-size="9.5" fill="var(--ink-faint)">' +
+               'time — every dot is a recorded check</text>';
         const TICKS = 5;
         for (let i = 0; i < TICKS; i++) {
           const tt = t0 + (t1 - t0) * (i / (TICKS - 1)), tx = x(tt);
@@ -1529,7 +1579,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   // The roster is the site's own account store — config users plus everyone
   // who signed up. CalMind's accounts live behind a key this page cannot
   // read, so its users appear here only once they have actually visited.
-  $usage = hit_usage(array_keys(app_users(app_config())));
+  $usage = $USAGE_DATA;
   $uw = $usage['windows'];
   $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'claudio' => 'Claudio', 'test' => 'Tests', 'dev' => 'Dev'];
   $laneDek  = [
@@ -1577,19 +1627,22 @@ function cell_chip(?int $sev, string $repo, array $running): string
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($rows as $rk => $p): ?>
-              <tr>
+            <?php foreach ($rows as $rk => $p): $anon = strncmp($p['name'], 'anon', 4) === 0; ?>
+              <tr data-key="<?= e($rk) ?>">
                 <?php // THREE states, because there are three. Orange: traffic
                       // with no session behind it. Green: an account that has
                       // actually signed in. Grey: an account that exists and
                       // has never been seen — a green dot on those claimed
                       // they were signed in, which they never have been. ?>
-                <td<?= $p['name'] === 'anonymous' ? ' title="Requests with no session — public pages, the login wall, and anyone browsing signed out."' : '' ?>>
-                  <span class="usage-dot <?= $p['name'] === 'anonymous' ? 'out' : ($p['last'] ? 'in' : 'never') ?>"></span>
+                <td<?= $anon ? ' title="Requests with no session — public pages, the login wall, and anyone browsing signed out. Numbered per address, in the order first seen."' : '' ?>>
+                  <span class="usage-dot <?= $anon ? 'out' : ($p['last'] ? 'in' : 'never') ?>"></span>
                   <span class="repo-name"><?= e($p['name']) ?></span>
+                  <?php // The address, and what it says about itself — the
+                        // whole reason the log keeps one. ?>
+                  <?php if (!empty($usage['anon_ip'][$p['name']])): ?><span class="who-ip"><?= e($usage['anon_ip'][$p['name']]) ?></span><?php endif; ?>
                 </td>
                 <?php foreach (array_keys($uw) as $wk): ?>
-                  <td class="num<?= $p['counts'][$wk] ? '' : ' zero' ?>"><?= number_format($p['counts'][$wk]) ?></td>
+                  <td class="num<?= $p['counts'][$wk] ? '' : ' zero' ?>" data-win="<?= e($wk) ?>"><?= number_format($p['counts'][$wk]) ?></td>
                 <?php endforeach; ?>
                 <?php // An account with no traffic has no last-seen — a
                       // formatted epoch-zero would read as 1969. ?>
@@ -1603,6 +1656,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
     </div>
   <?php endforeach; ?>
 
+  </div>
+
+  <div class="legend usage-legend">
+    <div class="legend-item"><span class="usage-dot in"></span> signed in at least once</div>
+    <div class="legend-item"><span class="usage-dot out"></span> anonymous — no session; numbered per address</div>
+    <div class="legend-item"><span class="usage-dot never"></span> account exists, never seen</div>
   </div>
 
   <?php // REQUESTS PER MINUTE, one line per account. The window picker changes
@@ -1626,7 +1685,10 @@ function cell_chip(?int $sev, string $repo, array $running): string
     const USAGE = <?= json_encode([
         'windows' => $uw,
         'series'  => $usage['series'],
-        'people'  => array_map(fn($p) => ['name' => $p['name'], 'lane' => $p['lane']], $usage['people']),
+        'buckets' => $usage['buckets'],   // how many buckets each window has
+        // apps: the per-app counts the table rewrites itself from.
+        'people'  => array_map(fn($p) => ['name' => $p['name'], 'lane' => $p['lane'],
+                                          'counts' => $p['counts'], 'apps' => $p['apps'] ?? []], $usage['people']),
         'now'     => $usage['now'],
     ]) ?>;
     // A colour per ACCOUNT, stable across every window so switching the span
@@ -1641,11 +1703,23 @@ function cell_chip(?int $sev, string $repo, array $running): string
       const svg = card.querySelector('svg.usagechart');
       const wk  = (card.querySelector('.win-tab.on') || {}).dataset.win || '3d';
       const w   = USAGE.windows[wk];
-      const rows = USAGE.series[wk] || {};
+      // The server ships SPARSE {bucket: count} per app; the zeroes are filled
+      // in here, for the one app being drawn. "*" sums every app.
+      const n0 = USAGE.buckets[wk];
+      const byApp = USAGE.series[wk] || {};
+      const app = (document.querySelector('#app-pick .inst-tab.on') || { dataset: {} }).dataset.app || '*';
+      const rows = {};
+      Object.keys(byApp).forEach((a) => {
+        if (app !== '*' && a !== app) { return; }
+        Object.keys(byApp[a]).forEach((k) => {
+          if (!rows[k]) { rows[k] = new Array(n0).fill(0); }
+          Object.keys(byApp[a][k]).forEach((b) => { rows[k][+b] += byApp[a][k][b]; });
+        });
+      });
       const keys = Object.keys(rows).filter(k => rows[k].some(v => v > 0));
 
-      const W = 900, H = 210, padL = 62, padR = 18, padT = 16, padB = 22;
-      const n = (rows[Object.keys(rows)[0]] || []).length || 1;
+      const W = 900, H = 210, padL = 62, padR = 18, padT = 16, padB = 40;
+      const n = n0 || 1;
       // The peak sets the scale, with a floor so an idle window is a flat line
       // near the bottom rather than noise magnified to full height.
       let peak = 0;
@@ -1688,6 +1762,21 @@ function cell_chip(?int $sev, string $repo, array $running): string
         });
       });
 
+      // THE X AXIS, labelled — Sean, 2026-08-23: "add x axis labels to plots".
+      // A row of buckets with no clock under it cannot be read back to "when".
+      const TICKS = 5;
+      for (let i = 0; i < TICKS; i++) {
+        const bi = Math.round((n - 1) * (i / (TICKS - 1))), tx = x(bi);
+        out += '<line x1="' + tx + '" y1="' + (H - padB + 4) + '" x2="' + tx + '" y2="' + (H - padB + 9) +
+               '" stroke="var(--line)" stroke-width="1"/>' +
+               '<text x="' + tx + '" y="' + (H - padB + 22) + '" text-anchor="' +
+               (i === 0 ? 'start' : i === TICKS - 1 ? 'end' : 'middle') +
+               '" font-size="10" fill="var(--ink-faint)">' + fmtF(from + bi * w.bucket) + '</text>';
+      }
+      out += '<text x="' + ((padL + W - padR) / 2) + '" y="' + (H - 2) +
+             '" text-anchor="middle" font-size="9.5" fill="var(--ink-faint)">requests per ' +
+             bucketLabel + ' bucket</text>';
+
       svg.innerHTML = out;
       card.querySelector('.ax-from').textContent = fmtF(from);
       card.querySelector('.ax-to').textContent = fmtF(USAGE.now);
@@ -1705,6 +1794,35 @@ function cell_chip(?int $sev, string $repo, array $running): string
       document.querySelectorAll('.win-tab').forEach(o => o.classList.remove('on'));
       b.classList.add('on');
       drawUsage();
+    }));
+
+    /**
+     * THE APP FILTER rewrites the table's numbers in place rather than
+     * reloading: every person's per-app counts are already here. A row with
+     * nothing in the chosen app dims rather than vanishing — an account that
+     * has never touched CalMind is a fact worth seeing, not a gap.
+     */
+    function applyApp() {
+      const app = (document.querySelector('#app-pick .inst-tab.on') || { dataset: {} }).dataset.app || '*';
+      document.querySelectorAll('#tab-usage .usage-table tbody tr').forEach((tr) => {
+        const p = USAGE.people[tr.dataset.key];
+        if (!p) { return; }
+        let total = 0;
+        tr.querySelectorAll('td.num[data-win]').forEach((td) => {
+          const wk = td.dataset.win;
+          const v = app === '*' ? (p.counts[wk] || 0) : (((p.apps || {})[app] || {})[wk] || 0);
+          total += v;
+          td.textContent = v.toLocaleString();
+          td.classList.toggle('zero', v === 0);
+        });
+        tr.classList.toggle('app-zero', total === 0);
+      });
+      drawUsage();
+    }
+    document.querySelectorAll('#app-pick .inst-tab').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('#app-pick .inst-tab').forEach(o => o.classList.remove('on'));
+      b.classList.add('on');
+      applyApp();
     }));
     drawUsage();
   </script>
@@ -1758,6 +1876,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     panel.classList.add('active');
+    const ap = document.getElementById('app-pick');
+    if (ap) { ap.hidden = name !== 'usage'; }
     return true;
   }
   document.querySelectorAll('.tab-btn').forEach(btn => {

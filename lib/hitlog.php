@@ -23,11 +23,15 @@
  * what makes "how many hits to the site" answerable at all — three logs in
  * three data dirs would need the reader to know about all three.
  *
- * WHAT IT DOES NOT HOLD. No IP address, no path, no query string, no referer,
- * no user agent. A hit counter needs none of them, and the difference between
+ * WHAT IT DOES NOT HOLD. No path, no query string, no referer, no user
+ * agent. A hit counter needs none of them, and the difference between
  * "how busy is this" and "who went where" is the whole reason to write the
  * narrower thing. `usage.log` already carries IPs for the security question;
  * this one answers a different question and should not be a second copy.
+ *
+ * IT DOES HOLD THE ADDRESS, as of 2026-08-23, on Sean's instruction — see
+ * hit_ip(). It is what tells two anonymous visitors apart, and it is the
+ * field every other log on this host already kept.
  */
 
 /** Where every instance's hits land. One file, host-wide. */
@@ -74,6 +78,64 @@ function hit_app(): string
     // One clean token, capped — the segment reaches a log line, and a crafted
     // path must not be able to smuggle a tab, a newline or a fake record in.
     return substr(preg_replace('/[^A-Za-z0-9._-]/', '_', $first), 0, 32);
+}
+
+/**
+ * THE CLIENT'S ADDRESS. Sean, 2026-08-23: "the hit log should always be
+ * storing ip!!!!! that was important!!! start making sure all logging stores
+ * ip". It is stored whole — an earlier pass here hashed it for privacy, which
+ * was the wrong call to make on his behalf: this is his log of his own site,
+ * and an address he cannot read answers none of the questions he keeps a log
+ * for. `usage.log` has always stored the address in full for the same reason.
+ *
+ * The proxy header comes FIRST because NFSN terminates TLS in front of Apache
+ * and forwards the real client there; REMOTE_ADDR on its own is the load
+ * balancer, identical for every visitor on the internet.
+ */
+function hit_ip(): string
+{
+    $ip = (string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '');
+    if ($ip === '') { return '-'; }
+    // The left-most entry is the client; the rest is the hop list. Cleaned to
+    // address characters so a forged header cannot smuggle a tab or a newline
+    // into the log and fake a record.
+    $ip = trim(explode(',', $ip)[0]);
+    $ip = preg_replace('/[^0-9a-fA-F:.]/', '', $ip);
+    return $ip === '' ? '-' : substr($ip, 0, 45);
+}
+
+/**
+ * WHERE THAT ADDRESS IS, roughly — Sean, 2026-08-23: "try to infer location
+ * from ip as well in logs".
+ *
+ * OFFLINE AND SYNCHRONOUS-FREE. A geo-IP lookup service would put a network
+ * call on the path of every single page render: a slow or dead lookup would
+ * make the whole site slow or dead, to decorate a log. So this classifies
+ * only what an address tells you about ITSELF — private ranges, loopback,
+ * the shapes worth telling apart — and leaves the rest as "-" rather than
+ * guessing a city it cannot know.
+ *
+ * If a real city is ever wanted, the honest way is a periodic offline job
+ * that annotates yesterday's log from a local database, never this function.
+ */
+function hit_where(string $ip): string
+{
+    if ($ip === '' || $ip === '-') { return '-'; }
+    if ($ip === '127.0.0.1' || $ip === '::1') { return 'local'; }
+    if (str_contains($ip, ':')) {
+        $l = strtolower($ip);
+        if (str_starts_with($l, 'fe80:')) { return 'lan'; }
+        if ($l[0] === 'f' && in_array($l[1] ?? '', ['c', 'd'], true)) { return 'lan'; }
+        return 'ipv6';
+    }
+    $o = array_map('intval', explode('.', $ip));
+    if (count($o) !== 4) { return '-'; }
+    if ($o[0] === 10) { return 'lan'; }
+    if ($o[0] === 192 && $o[1] === 168) { return 'lan'; }
+    if ($o[0] === 172 && $o[1] >= 16 && $o[1] <= 31) { return 'lan'; }
+    if ($o[0] === 169 && $o[1] === 254) { return 'link-local'; }
+    if ($o[0] === 100 && $o[1] >= 64 && $o[1] <= 127) { return 'carrier-nat'; }
+    return 'internet';
 }
 
 /**
@@ -163,6 +225,7 @@ function hit_log(?string $app = null, ?string $user = null): void
         $clean($method),
         $clean($who ?? '-'),
         hit_agent(),
+        hit_ip(),
     ]) . "\n";
     @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
     hit_maybe_sweep();
@@ -316,24 +379,56 @@ function hit_usage(array $roster = []): array
         foreach (array_keys($lanes) as $lk) { $lanes[$lk][$wk] = 0; }
     }
 
+    /**
+     * ANONYMOUS IS NOT ONE PERSON. Sean, 2026-08-23: "split anonymous ... to
+     * anon-1, anon-2, etc.. any unclear ones can just be anon-x". Visitors are
+     * numbered in the order they first appear in the window, so anon-1 is the
+     * earliest — a stable, readable name for a hash nobody wants to read. A
+     * line written before the token existed has nothing to tell them apart by
+     * and lands in anon-x, which is honestly one bucket of "we cannot say".
+     */
+    $anonNo = []; $anonIp = []; $nextAnon = 1;
+    $apps = [];
     foreach ($rows as $r) {
         $lane = hit_lane($r);
-        $who  = $r['user'] === '-' ? '(signed out)' : $r['user'];
+        if ($r['user'] === '-') {
+            $v = (string) ($r['ip'] ?? '-');
+            if ($v === '-' || $v === '') {
+                $who = 'anon-x';
+            } else {
+                if (!isset($anonNo[$v])) { $anonNo[$v] = $nextAnon++; }
+                $who = 'anon-' . $anonNo[$v];
+                $anonIp[$who] = $v . ' · ' . hit_where($v);
+            }
+        } else {
+            $who = $r['user'];
+        }
+        $app = ($r['app'] ?? '') === '' ? 'home' : $r['app'];
         // The same name on the sandbox and on production is two lanes of
         // usage, not one account seen twice — so the lane is part of the key.
-        $key  = $lane . "\0" . $who;
+        // "|" and not NUL: this key becomes a data- attribute on the page,
+        // and a NUL byte does not survive one — the table could not find its own
+        // rows to rewrite. Usernames are cleaned to [A-Za-z0-9._@-], so the bar
+        // cannot collide with a name.
+        $key  = $lane . "|" . $who;
         if (!isset($people[$key])) {
-            $people[$key] = ['name' => $who, 'lane' => $lane, 'last' => 0, 'counts' => array_fill_keys(array_keys($wins), 0)];
+            $people[$key] = ['name' => $who, 'lane' => $lane, 'last' => 0,
+                             'counts' => array_fill_keys(array_keys($wins), 0), 'apps' => []];
         }
         $people[$key]['last'] = max($people[$key]['last'], $r['ts']);
         foreach ($wins as $wk => $w) {
             if ($r['ts'] < $now - $w['secs']) { continue; }
             $people[$key]['counts'][$wk]++;
+            $people[$key]['apps'][$app][$wk] = ($people[$key]['apps'][$app][$wk] ?? 0) + 1;
             $lanes[$lane][$wk]++;
+            $apps[$app][$wk] = ($apps[$app][$wk] ?? 0) + 1;
             $b = (int) floor(($r['ts'] - ($now - $w['secs'])) / $w['bucket']);
-            $series[$wk][$key][$b] = ($series[$wk][$key][$b] ?? 0) + 1;
+            $series[$wk][$app][$key][$b] = ($series[$wk][$app][$key][$b] ?? 0) + 1;
         }
     }
+    // Busiest app first, on the longest window — an app quiet this hour but
+    // heavy this year should not sort below one seen once.
+    uasort($apps, fn($a, $b) => ($b['year'] ?? 0) <=> ($a['year'] ?? 0));
 
     /**
      * EVERY KNOWN ACCOUNT, not only the ones that showed up — Sean,
@@ -345,10 +440,14 @@ function hit_usage(array $roster = []): array
      */
     foreach ($roster as $who) {
         $lane = $who === 'sean' ? 'sean' : 'other';
-        $key  = $lane . "\0" . $who;
+        // "|" and not NUL: this key becomes a data- attribute on the page,
+        // and a NUL byte does not survive one — the table could not find its own
+        // rows to rewrite. Usernames are cleaned to [A-Za-z0-9._@-], so the bar
+        // cannot collide with a name.
+        $key  = $lane . "|" . $who;
         if (isset($people[$key])) { continue; }
         $people[$key] = ['name' => $who, 'lane' => $lane, 'last' => 0,
-                         'counts' => array_fill_keys(array_keys($wins), 0)];
+                         'counts' => array_fill_keys(array_keys($wins), 0), 'apps' => []];
     }
 
     // Busiest first, on the shortest window that distinguishes them — an
@@ -360,20 +459,19 @@ function hit_usage(array $roster = []): array
         return strcmp($a['name'], $b['name']);
     });
 
-    // The series, as dense arrays of requests per minute — JSON with a hole in
-    // it is a hole the chart has to guess about, and a quiet bucket is a real
-    // zero, not a missing reading.
+    // Sparse on the way out — {bucket: count}, only where something happened.
+    // The dense shape is apps x people x windows x buckets, tens of thousands
+    // of numbers for a site that serves a few hundred requests a day; the page
+    // fills in the zeroes for the one app it is drawing.
     $out = [];
     foreach ($wins as $wk => $w) {
         $n = (int) ceil($w['secs'] / $w['bucket']);
-        foreach ($people as $key => $p) {
-            $line = array_fill(0, $n, 0.0);
-            // The raw COUNT in the bucket — see hit_windows() on why this
-            // stopped being a per-minute rate.
-            foreach ($series[$wk][$key] ?? [] as $b => $c) {
-                if ($b >= 0 && $b < $n) { $line[$b] = (int) $c; }
+        foreach ($series[$wk] ?? [] as $app => $byKey) {
+            foreach ($byKey as $key => $buckets) {
+                foreach ($buckets as $b => $c) {
+                    if ($b >= 0 && $b < $n) { $out[$wk][$app][$key][$b] = (int) $c; }
+                }
             }
-            $out[$wk][$key] = $line;
         }
     }
 
@@ -381,8 +479,11 @@ function hit_usage(array $roster = []): array
         'windows' => $wins,
         'people'  => $people,
         'lanes'   => $lanes,
+        'apps'    => $apps,
         'series'  => $out,
+        'buckets' => array_map(fn($w) => (int) ceil($w['secs'] / $w['bucket']), $wins),
         'from'    => $now - max(array_column($wins, 'secs')),
+        'anon_ip' => $anonIp,
         'oldest'  => $rows ? $rows[0]['ts'] : null,
         'now'     => $now,
     ];
@@ -403,7 +504,7 @@ function hit_tail_since(int $since, int $bytes = 1024 * 1024): array
             // Lines written before the agent field exists are five long and
             // read as human, which is what they were.
             $rows[] = ['ts' => $ts, 'instance' => $f[1], 'app' => $f[2], 'method' => $f[3],
-                       'user' => $f[4], 'agent' => $f[5] ?? '-'];
+                       'user' => $f[4], 'agent' => $f[5] ?? '-', 'ip' => $f[6] ?? '-'];
         }
         // The live file went back far enough; the rotated one cannot add
         // anything newer than its first line.

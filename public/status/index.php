@@ -254,8 +254,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
     --live: #1f8a4c;
     --live-bg: #e4f5ea;
-    --built: #5f9e78;
-    --built-bg: #e9f4ed;
+    --built: #3fae86;
+    --built-bg: #dff5ec;
     --done: #2c6fd1;
     --done-bg: #e6eefb;
     --partial: #a86a15;
@@ -288,8 +288,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
       --live: #4fd183;
       --live-bg: #16311f;
-      --built: #8fd6a8;
-      --built-bg: #1b2c23;
+      --built: #7fe8c0;
+      --built-bg: #16332b;
       --done: #77aef2;
       --done-bg: #17263a;
       --partial: #e8a94b;
@@ -940,7 +940,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
             // thing without translation. ?>
       <div class="legend-item"><span class="swatch running"></span> <strong>In Progress</strong> — shipping now</div>
       <div class="legend-item"><span class="swatch live"></span> <strong>Operational</strong> — installed, seen working</div>
-      <div class="legend-item"><span class="swatch built"></span> <strong>Built, not installed</strong> — this release compiled it; the device still carries an older one</div>
+      <div class="legend-item"><span class="swatch built"></span> <strong>built</strong> — built, not installed; the device carries an older one</div>
       <div class="legend-item"><span class="swatch done"></span> <strong>Build Only</strong> — builds, deliberately never installed</div>
       <div class="legend-item"><span class="swatch partial"></span> <strong>Issue for Claude</strong> — mine to fix</div>
       <div class="legend-item"><span class="swatch crit"></span> <strong>Needs Attention</strong> — yours</div>

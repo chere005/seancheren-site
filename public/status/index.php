@@ -891,6 +891,42 @@ function cell_chip(?int $sev, string $repo, array $running): string
     // Short names, because an annotation at every event has to fit beside its
     // dot rather than beside the next one along.
     const PLAT_SHORT = { web: 'Web', macos: 'Mac', windows: 'Win', ios: 'iOS', watchos: 'Watch', android: 'Andr' };
+
+    /**
+     * WHAT HAPPENED, not what it is — Sean, 2026-08-23: "the annotation for
+     * each event is more like 'Build Started' etc etc".
+     *
+     * A label reading "Web, iOS" named the subject and left the verb out, so
+     * the chart still had to be decoded against the y axis to learn anything.
+     * A transition has a name: entering In Progress is a release starting,
+     * leaving it is that release landing, and landing on Needs Attention is a
+     * different event from landing on Operational even though both end a
+     * build. The pair (from, to) is the whole event, so that is what is read.
+     *
+     * WHO moved stays in the tooltip and in the line colour. One label, one
+     * fact.
+     */
+    function eventPhrase(from, to) {
+      if (from === null)            { return 'First check'; }
+      if (to === 4)                 { return 'Build started'; }
+      if (from === 4) {
+        if (to === 0)  { return 'Build finished'; }
+        if (to === 1)  { return 'Built, not installed'; }
+        if (to === 2)  { return 'Finished with an issue'; }
+        if (to === 3)  { return 'Build failed'; }
+        if (to === -1) { return 'Target dropped'; }
+      }
+      if (to === -1)                { return 'Target dropped'; }
+      if (from === -1)              { return 'Target added'; }
+      if (to === 3)                 { return 'Went down'; }
+      if (from === 3 && to === 0)   { return 'Recovered'; }
+      if (from === 3)               { return 'Partly recovered'; }
+      if (to === 2)                 { return 'Issue appeared'; }
+      if (from === 2 && to === 0)   { return 'Issue fixed'; }
+      if (to === 1)                 { return 'Build only'; }
+      if (to === 0)                 { return 'Back to operational'; }
+      return SEV_LABEL[to] || '';
+    }
     const SEV_LABEL = {}; BANDS.forEach(b => { SEV_LABEL[b.sev] = b.label; });
   </script>
 
@@ -1096,10 +1132,21 @@ function cell_chip(?int $sev, string $repo, array $running): string
             const [from, to] = mk.split('>').map(Number);
             const members = moved[mk], xa = x(mine[i].t);
             const c = colorOf[gkey(groupsAt[i][to] || members)];
+            const who = members.map(p => PLATFORMS[p]).join(', ');
             out += '<line x1="' + xa + '" y1="' + y(from) + '" x2="' + xa + '" y2="' + y(to) +
                    '" stroke="' + c + '" stroke-width="2.6" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.85">' +
-                   '<title>' + members.map(p => PLATFORMS[p]).join(', ') + ': ' + SEV_LABEL[from] +
+                   '<title>' + who + ': ' + SEV_LABEL[from] +
                    ' → ' + SEV_LABEL[to] + '\n' + fmtF(mine[i].t) + '</title></line>';
+
+            // THE EVENT, NAMED, at the end it arrived at. Kept off the right
+            // edge, and below the dot when the destination is the top band —
+            // there is no room above it.
+            const near = xa > (padL + (W - padR)) / 2;
+            const above = BAND_AT[to] > 0;
+            out += '<text x="' + (xa + (near ? -9 : 9)) + '" y="' + (y(to) + (above ? -10 : 16)) +
+                   '" text-anchor="' + (near ? 'end' : 'start') + '" font-size="9.5" ' +
+                   'fill="var(--ink-soft)">' + eventPhrase(from, to) +
+                   '<title>' + who + '\n' + fmtF(mine[i].t) + '</title></text>';
           });
         }
 
@@ -1125,20 +1172,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
             out += '<circle cx="' + cx + '" cy="' + y(sev) + '" r="' + R + '" fill="' + c +
                    '" stroke="var(--surface)" stroke-width="1.5"><title>' + tip + '</title></circle>';
 
-            // ANNOTATE EACH EVENT — Sean, 2026-08-23. A dot with a tooltip
-            // only tells you what it is once you go looking; a chart read at a
-            // glance should already say which platforms moved where. Labels go
-            // on CHANGES and on the first reading, not on every routine check,
-            // or a quiet week would be a wall of repeated text.
-            if (anyMove || i === 0) {
-              const short = members.map(p => PLAT_SHORT[p] || PLATFORMS[p]).join(', ');
-              // Away from the edges, and above the dot unless that is the top
-              // band, where there is no room.
-              const near = cx > (padL + (W - padR)) / 2;
-              const above = BAND_AT[sev] > 0;
-              out += '<text x="' + (cx + (near ? -9 : 9)) + '" y="' + (y(sev) + (above ? -9 : 15)) +
-                     '" text-anchor="' + (near ? 'end' : 'start') + '" font-size="9.5" ' +
-                     'fill="var(--ink-soft)">' + short + '</text>';
+            // The FIRST reading is an event with nothing before it, so it is
+            // labelled here; every later one is named at its arrival, in the
+            // move loop above, where both ends of the transition are known.
+            if (i === 0) {
+              out += '<text x="' + (cx + 9) + '" y="' + (y(sev) - 9) +
+                     '" text-anchor="start" font-size="9.5" fill="var(--ink-faint)">First check</text>';
             }
           });
         });

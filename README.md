@@ -36,6 +36,8 @@ refuse to.
 ```sh
 php -S 127.0.0.1:8787 -t public     # the site at /, /chat/, /akisbookshelf/, /akisthemes/, /status/
 php tools/test.php                  # the test suite (no framework)
+php tools/test.php --list           # the area names, with the case count of each
+php tools/test.php auth             # only areas whose name contains one of these — seconds, not 15
 find public lib tools -name '*.php' -exec php -l {} \;   # lint
 ```
 

@@ -499,6 +499,69 @@ if (!is_array($results)) {
     // TTL rather than by how often somebody opened the page.
     status_sample_record(status_sample_row($repos, $WEB_PROBE, $endpoints, $results));
 }
+// ------------------------------------------------------------- the headline
+/**
+ * WHAT THE PAGE IS FOR, SAID IN ONE LINE.
+ *
+ * Sean, 2026-08-23, of the old headline ("Five repos, five platforms, two ways
+ * of syncing"): "is fluff, you can do better than that". He is right — it
+ * described the architecture, which does not change, on a page whose whole job
+ * is to say what changed. Somebody opening this wants one answer: is anything
+ * wrong, and is it wrong in a way that needs them.
+ *
+ * So the headline is COMPUTED from the same two sources the tables below
+ * render — the live checks and the platform matrix — and it can only ever say
+ * "everything is fine" when both of those agree that it is. A deliberate
+ * choice (severity 1: MyCalMind staying off the phone) is not a problem and is
+ * not counted as one; a known small issue (2) is mentioned but does not raise
+ * the alarm; anything down, any broken sign-in, and any severity 3 does.
+ *
+ * The one rule this must never break: it may not read better than the truth.
+ * A green headline over a red table is worse than no headline.
+ */
+function status_headline(array $repos, array $endpoints, array $results, bool $isRunning): array
+{
+    $down = [];      // endpoints that did not answer
+    $broken = [];    // endpoints whose sign-in failed
+    foreach ($endpoints as $group => $domains) {
+        foreach ($domains as $domain => $list) {
+            foreach ($list as $ep) {
+                $r = $results[$group][$ep['url']] ?? null;
+                if (!$r || empty($r['ok'])) { $down[] = $ep['label'] . ' on ' . $domain; continue; }
+                if (($r['login']['state'] ?? '') === 'failed') { $broken[] = $ep['label'] . ' on ' . $domain; }
+            }
+        }
+    }
+    $rough = [];     // recorded severity 2 — a known small issue
+    $bad = [];       // recorded severity 3 — wants attention
+    foreach ($repos as $repo) {
+        foreach ($repo['plat'] as $plat => $cell) {
+            if (($cell[0] ?? null) === 2) { $rough[] = $repo['name'] . ' on ' . $plat; }
+            if (($cell[0] ?? null) === 3) { $bad[] = $repo['name'] . ' on ' . $plat; }
+        }
+    }
+    $urgent = array_merge($down, $broken, $bad);
+    $n = count($urgent);
+
+    if ($n > 0) {
+        // NAME IT when there is one. "1 thing needs you" makes a person hunt
+        // for a fact this line already had.
+        $title = $n === 1 ? ucfirst($urgent[0]) . ' needs you' : $n . ' things need you';
+        $bits = [];
+        if ($down)   { $bits[] = count($down) . ' not answering'; }
+        if ($broken) { $bits[] = count($broken) . ' up but nobody can sign in'; }
+        if ($bad)    { $bits[] = count($bad) . ' flagged in the matrix'; }
+        return [$title, implode(' &middot; ', $bits) . '.', 'crit'];
+    }
+    if ($rough) {
+        $title = count($rough) === 1 ? 'Up, with one rough edge' : 'Up, with ' . count($rough) . ' rough edges';
+        return [$title, ucfirst($rough[0]) . (count($rough) > 1 ? ', and ' . (count($rough) - 1) . ' more' : '') . '. Nothing is down.', 'partial'];
+    }
+    if ($isRunning) { return ['A release is going out right now', 'Everything that has finished is up.', 'running']; }
+    return ['Everything is up', '', 'live'];
+}
+[$hlTitle, $hlDek, $hlKind] = status_headline($repos, $endpoints, $results, (bool) $isRunning);
+
 ?>
 <!doctype html>
 <html lang="en">
@@ -617,6 +680,18 @@ if (!is_array($results)) {
     text-transform: uppercase;
     color: var(--accent);
   }
+
+  /* The headline wears its own state — a dot in the same colours the chips
+     use, so the page's one-line answer and its tables cannot disagree. */
+  h1 .hl-dot {
+    display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+    margin-right: 12px; vertical-align: 0.08em; flex: none;
+  }
+  h1.hl-live .hl-dot    { background: var(--live); }
+  h1.hl-partial .hl-dot { background: var(--partial); }
+  h1.hl-crit .hl-dot    { background: var(--crit); }
+  h1.hl-running .hl-dot { background: var(--running); animation: pulse 1.4s ease-in-out infinite; }
+  h1.hl-crit { color: var(--crit); }
 
   h1 {
     margin: 0;
@@ -852,17 +927,24 @@ if (!is_array($results)) {
       <div class="eyebrow">Mind-Suite &middot; deploy &amp; sync status</div>
       <a href="?logout">Log out</a>
     </div>
-    <h1>Five repos, five platforms, two ways of syncing</h1>
+    <?php // Computed, not written — see status_headline(). A green headline over
+          // a red table is worse than no headline, so this can only say
+          // everything is fine when the live checks and the matrix both do. ?>
+    <h1 class="hl-<?= $hlKind ?>"><span class="hl-dot"></span><?= $hlTitle ?></h1>
     <p class="dek">
-      CalMind, ChefMind, AcctMind and MyCalMind, plus CoreMind's shared
-      tooling behind all of them.
+      <?php if ($hlDek !== ''): ?><strong><?= $hlDek ?></strong> <?php endif; ?>
+      <?php // Counted, not arithmetic on COUNT_RECURSIVE — that counted every
+            // field of every endpoint and reported 133 of them. ?>
+      <?php $epCount = 0; $domCount = [];
+        foreach ($endpoints as $domains) { foreach ($domains as $dom => $list) { $epCount += count($list); $domCount[$dom] = true; } } ?>
+      <?= $epCount ?> endpoints checked every <?= $cacheTtl ?>s across <?= count($domCount) ?> domains.
       <?php // Derived, never typed. A hardcoded date on a status page is wrong the
             // day after it is written, and wrong in the one way nobody checks. ?>
-      <strong><?= $isRunning
-        ? 'A dtp/tdtp is running right now.'
+      <?= $isRunning
+        ? ''
         : ($latest && !empty($latest['finished_at'])
-            ? 'Last release: ' . e($latest['finished_at']) . '.'
-            : 'No release recorded yet.') ?></strong>
+            ? 'Last release ' . e($latest['finished_at']) . '.'
+            : 'No release recorded yet.') ?>
     </p>
   </header>
 

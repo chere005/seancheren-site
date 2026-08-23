@@ -111,6 +111,13 @@ $repos = [
      'watchos' => [1, 'builds', 'Aug 22, 6:21 pm'],
      'android' => [0, 'verified', 'local emulator<br>Aug 22'],
    ]],
+  ['name' => 'BookMind', 'group' => 'mindsuite', 'tag' => 'cloned from the bookshelf',
+   'sync' => '<code>seancheren.com/CalMind/api/index.php</code><br>login only — data stays server-side',
+   'plat' => [
+     'web'     => [0, 'seancheren.com/BookMind'],
+     'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
+     'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
+   ]],
   ['name' => 'CoreMind', 'group' => 'mindsuite', 'tag' => 'shared tooling',
    'sync' => 'none',
    'plat' => [
@@ -173,33 +180,39 @@ $WEB_PROBE_AT = [
     'prod' => [
         'CalMind'         => ['https://seancheren.com/CalMind/', 'https://seancheren.com/CalMind/api/index.php'],
         'ChefMind'        => ['https://seancheren.com/ChefMind/'],
+        'BookMind'        => ['https://seancheren.com/BookMind/'],
         'AcctMind'        => ['https://seancheren.com/AcctMind/'],
         'seancheren-site' => ['https://seancheren.com/'],
         'aki-tarot'       => ['https://seancheren.com/akitarot/'],
     ],
     'test' => [
         'CalMind'         => ['https://test.seancheren.com/CalMind/'],
+        'BookMind'        => ['https://test.seancheren.com/BookMind/'],
         'ChefMind'        => ['https://test.seancheren.com/ChefMind/'],
         'AcctMind'        => ['https://test.seancheren.com/AcctMind/'],
         'seancheren-site' => ['https://test.seancheren.com/'],
     ],
     'dev' => [
         'seancheren-site' => ['https://dev.seancheren.com/'],
+        'BookMind'        => ['https://dev.seancheren.com/BookMind/'],
     ],
 ];
 // The label a web cell shows for each repo on each instance.
 $WEB_LABEL_AT = [
     'prod' => [
         'CalMind' => 'seancheren.com/CalMind', 'ChefMind' => 'seancheren.com/ChefMind',
+        'BookMind' => 'seancheren.com/BookMind',
         'AcctMind' => 'seancheren.com/AcctMind', 'seancheren-site' => 'seancheren.com',
         'aki-tarot' => 'seancheren.com/akitarot',
     ],
     'test' => [
         'CalMind' => 'test.&#8203;seancheren.com/CalMind', 'ChefMind' => 'test.&#8203;seancheren.com/ChefMind',
+        'BookMind' => 'test.&#8203;seancheren.com/BookMind',
         'AcctMind' => 'test.&#8203;seancheren.com/AcctMind', 'seancheren-site' => 'test.&#8203;seancheren.com',
     ],
     'dev' => [
         'seancheren-site' => 'dev.&#8203;seancheren.com',
+        'BookMind' => 'dev.&#8203;seancheren.com/BookMind',
     ],
 ];
 // Production stays the default everywhere else in this file, so nothing that
@@ -612,6 +625,8 @@ $endpoints = [
              'auth' => "Bearer token; the <code>spaces</code> action answers without one"],
             ['label' => 'ChefMind',   'app' => 'ChefMind', 'url' => 'https://seancheren.com/ChefMind/',
              'scope_key' => 'calmind', 'auth' => "Same users and tokens as CalMind"],
+            ['label' => 'BookMind',   'app' => 'BookMind', 'url' => 'https://seancheren.com/BookMind/',
+             'scope_key' => 'calmind', 'auth' => "Signs in through CalMind's login action"],
             ['label' => 'AcctMind',   'app' => 'AcctMind', 'url' => 'https://seancheren.com/AcctMind/',
              'scope_key' => 'site', 'auth' => "Site login, reused"],
         ],

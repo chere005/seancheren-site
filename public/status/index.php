@@ -221,7 +221,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Mind-Suite Status</title>
+<title>MindSuite Status</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;650&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -695,7 +695,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   <header>
     <div class="eyebrow-row">
-      <div class="eyebrow">Mind-Suite &middot; deploy &amp; sync status</div>
+      <div class="eyebrow">MindSuite &middot; deploy &amp; sync status</div>
       <span class="live-stamp" id="live-stamp">live</span>
       <a href="?logout">Log out</a>
     </div>
@@ -731,7 +731,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   ?>
   <div class="kpis">
     <div class="kpi"><span class="n">5</span><span class="l">Mind-suite repos &middot; 2 developer &middot; 2 website</span></div>
-    <div class="kpi"><span class="n">3</span><span class="l">apps syncing through a server</span></div>
+    <div class="kpi"><span class="n">2</span><span class="l">apps syncing through a server</span></div>
     <div class="kpi"><span class="n">1</span><span class="l">app syncing local-only, via Bonjour</span></div>
     <div class="kpi"><span class="n">4 / 4</span><span class="l">apps building &amp; running on Android</span></div>
     <div class="kpi"><span class="n">3 / 3</span><span class="l">phone slots spent (free-tier cap)</span></div>
@@ -941,8 +941,17 @@ function cell_chip(?int $sev, string $repo, array $running): string
         $sev = (int) ($run['severity'] ?? 3);
         $isRun = ($run['status'] ?? '') === 'running';
         $cls = $isRun ? 'running' : severity_chip_class($sev);
+        // The card carries its own span and target, so selecting it can zoom
+        // the charts and hide the repos it never touched — without a fetch.
+        // The id is a UTC stamp (report-status.sh writes date -u), which is
+        // sturdier than parsing the human-readable Central string back.
+        $d = DateTime::createFromFormat('YmdHis', (string) ($run['id'] ?? ''), new DateTimeZone('UTC'));
+        $fromEp = $d ? $d->getTimestamp() : '';
+        $toEp = $isRun ? '' : ((int) strtotime((string) ($run['finished_at'] ?? '')) ?: '');
       ?>
-        <button class="run-btn<?= $i === 0 ? ' selected' : '' ?>" data-run="<?= $i ?>">
+        <button class="run-btn<?= $i === 0 ? ' selected' : '' ?>" data-run="<?= $i ?>"
+                data-from="<?= e($fromEp) ?>" data-to="<?= e($toEp) ?>"
+                data-repos="<?= e($run['target'] ?? '') ?>">
           <span class="t"><?= e(ctFull($run['started_at'] ?? '?')) ?></span>
           <?php // The separator is OUTSIDE e(): escaping '&middot;' turns its own
                 // ampersand into &amp; and the button reads a literal "&middot;". ?>
@@ -1039,8 +1048,19 @@ function cell_chip(?int $sev, string $repo, array $running): string
         const repo  = card.dataset.repo;
         const plats = [...card.querySelectorAll('.repo-pick input[data-plat]:checked')].map(i => i.dataset.plat);
 
-        const W = 900, H = 210, padL = 108, padR = 18, padT = 18, padB = 38;
-        const t0 = SAMPLES[0].t, t1 = Math.max(SAMPLES[SAMPLES.length - 1].u, t0 + 60);
+        const W = 900, H = 210, padL = 108, padR = 18, padT = 42, padB = 38;
+        /**
+         * THE WINDOW IS THE SELECTED RUN — Sean, 2026-08-23: "make sure i can
+         * switch between different runs from the cards at the top". With no
+         * card selected the chart spans everything recorded; with one, it
+         * zooms to that run plus a margin, so the before and after states are
+         * both in frame.
+         */
+        let t0 = SAMPLES[0].t, t1 = Math.max(SAMPLES[SAMPLES.length - 1].u, t0 + 60);
+        if (RUN_WINDOW) {
+          const pad = Math.max(300, (RUN_WINDOW[1] - RUN_WINDOW[0]) * 0.2);
+          t0 = RUN_WINDOW[0] - pad; t1 = RUN_WINDOW[1] + pad;
+        }
         const x = (t) => padL + ((t - t0) / (t1 - t0)) * (W - padL - padR);
         const y = (sev) => padT + (BAND_AT[sev] / (BANDS.length - 1)) * (H - padT - padB);
 
@@ -1074,7 +1094,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         }
 
         // Only the samples that say anything about this repo's chosen platforms.
-        const mine = SAMPLES.filter(s => plats.some(p => (repo + '.' + p) in s.s));
+        const mine = SAMPLES.filter(s => s.u >= t0 && s.t <= t1 && plats.some(p => (repo + '.' + p) in s.s));
         if (!plats.length || !mine.length) {
           svg.innerHTML = out;
           card.querySelector('.ax-from').textContent = fmtT(t0);
@@ -1110,7 +1130,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
         // The horizontal runs: one per group per sample.
         groupsAt.forEach((g, i) => {
-          const xa = x(mine[i].t), xb = x(mine[i].u);
+          const xa = x(Math.max(mine[i].t, t0)), xb = x(Math.min(mine[i].u, t1));
           Object.keys(g).forEach((sevStr) => {
             const sev = +sevStr, members = g[sevStr], c = colorOf[gkey(members)];
             out += '<line x1="' + xa + '" y1="' + y(sev) + '" x2="' + Math.max(xb, xa + 0.5) + '" y2="' + y(sev) +
@@ -1121,6 +1141,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
         // The vertical moves, drawn per DESTINATION group so a split shows the
         // colour that is arriving rather than the one being left behind.
+        const evts = [];
         for (let i = 1; i < at.length; i++) {
           const moved = {};
           Object.keys(at[i]).forEach((p) => {
@@ -1137,18 +1158,44 @@ function cell_chip(?int $sev, string $repo, array $running): string
                    '" stroke="' + c + '" stroke-width="2.6" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.85">' +
                    '<title>' + who + ': ' + SEV_LABEL[from] +
                    ' → ' + SEV_LABEL[to] + '\n' + fmtF(mine[i].t) + '</title></line>';
-
-            // THE EVENT, NAMED, at the end it arrived at. Kept off the right
-            // edge, and below the dot when the destination is the top band —
-            // there is no room above it.
-            const near = xa > (padL + (W - padR)) / 2;
-            const above = BAND_AT[to] > 0;
-            out += '<text x="' + (xa + (near ? -9 : 9)) + '" y="' + (y(to) + (above ? -10 : 16)) +
-                   '" text-anchor="' + (near ? 'end' : 'start') + '" font-size="9.5" ' +
-                   'fill="var(--ink-soft)">' + eventPhrase(from, to) +
-                   '<title>' + who + '\n' + fmtF(mine[i].t) + '</title></text>';
+            evts.push({ t: mine[i].t, phrase: eventPhrase(from, to), who });
           });
         }
+        if (mine.length && mine[0].t >= t0) {
+          evts.push({ t: mine[0].t, phrase: 'First check', who: '' });
+        }
+
+        /**
+         * THE ANNOTATIONS, off the data — Sean, 2026-08-23: "annotations
+         * should not overlay.. draw a faint vertical dotted line over the time
+         * of the event, and a readable description next to that line".
+         *
+         * A label beside its dot sat wherever the dot sat, which above a busy
+         * band meant labels through lines and through each other. The dotted
+         * rule puts the WHEN on the chart at full height, and the words live
+         * in the clear strip above the top band. Labels close in x step down
+         * through three rows rather than colliding; same-instant events share
+         * one rule and one label, joined.
+         */
+        const byT = {};
+        evts.forEach(e => { (byT[e.t] = byT[e.t] || []).push(e); });
+        const laneEnd = [-1e9, -1e9, -1e9];
+        Object.keys(byT).map(Number).sort((a, b) => a - b).forEach((tt) => {
+          const lx = x(tt);
+          const phrases = [...new Set(byT[tt].map(e => e.phrase))].join(' · ');
+          const whos = [...new Set(byT[tt].map(e => e.who).filter(Boolean))].join('; ');
+          out += '<line x1="' + lx + '" y1="' + (padT - 2) + '" x2="' + lx + '" y2="' + (H - padB) +
+                 '" stroke="var(--ink-faint)" stroke-width="1" stroke-dasharray="2,5" opacity="0.5"/>';
+          const near = lx > (padL + (W - padR)) / 2;
+          const wpx = phrases.length * 5.4;
+          const x0 = near ? lx - 5 - wpx : lx + 5, x1e = x0 + wpx;
+          let lane = 0;
+          while (lane < 2 && x0 < laneEnd[lane] + 8) { lane++; }
+          laneEnd[lane] = x1e;
+          out += '<text x="' + (lx + (near ? -5 : 5)) + '" y="' + (5.5 + lane * 11) +
+                 '" text-anchor="' + (near ? 'end' : 'start') + '" font-size="9.5" fill="var(--ink-soft)">' +
+                 phrases + '<title>' + (whos ? whos + '\n' : '') + fmtF(tt) + '</title></text>';
+        });
 
         // THE DOTS. Every sample boundary is an event, and every group gets one
         // — the ones that moved and the ones that did not.
@@ -1162,6 +1209,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
           // the gap was "unchanged" or "unrecorded".
           const anyMove = i > 0 && Object.keys(at[i]).some(p => at[i - 1][p] !== undefined && at[i - 1][p] !== at[i][p]);
           if (anyMove) { events++; }
+          if (mine[i].t < t0 || mine[i].t > t1) { return; }
           const cx = x(mine[i].t);
           Object.keys(g).forEach((sevStr) => {
             const sev = +sevStr, members = g[sevStr], c = colorOf[gkey(members)];
@@ -1172,13 +1220,6 @@ function cell_chip(?int $sev, string $repo, array $running): string
             out += '<circle cx="' + cx + '" cy="' + y(sev) + '" r="' + R + '" fill="' + c +
                    '" stroke="var(--surface)" stroke-width="1.5"><title>' + tip + '</title></circle>';
 
-            // The FIRST reading is an event with nothing before it, so it is
-            // labelled here; every later one is named at its arrival, in the
-            // move loop above, where both ends of the transition are known.
-            if (i === 0) {
-              out += '<text x="' + (cx + 9) + '" y="' + (y(sev) - 9) +
-                     '" text-anchor="start" font-size="9.5" fill="var(--ink-faint)">First check</text>';
-            }
           });
         });
 
@@ -1201,20 +1242,51 @@ function cell_chip(?int $sev, string $repo, array $running): string
         card.querySelector('.graph-key').innerHTML = keyHtml;
       }
 
-      function drawAll() { document.querySelectorAll('.graph-card[data-graph]').forEach(drawChart); }
+      function drawAll() { document.querySelectorAll('.graph-card[data-graph]').forEach(c => { if (!c.hidden) { drawChart(c); } }); }
+
+      /**
+       * THE SELECTED RUN drives both the window and which panes show — Sean,
+       * 2026-08-23: "if a deployment only affects some specific repos, only
+       * show the affected repos history plot". Deselecting (clicking the card
+       * again) returns to everything.
+       */
+      let RUN_WINDOW = null, RUN_REPOS = null;
+      function applyRun(btn) {
+        RUN_WINDOW = null; RUN_REPOS = null;
+        if (btn) {
+          const f = parseInt(btn.dataset.from, 10);
+          const tt = btn.dataset.to ? parseInt(btn.dataset.to, 10) : Math.floor(Date.now() / 1000);
+          if (!isNaN(f)) { RUN_WINDOW = [f, Math.max(tt, f + 60)]; }
+          const names = (btn.dataset.repos || '').trim().split(/\s+/).filter(Boolean)
+            .map(t => t === 'core' ? 'CoreMind' : t);
+          if (names.length) { RUN_REPOS = new Set(names); }
+        }
+        paneSync();
+        drawAll();
+      }
+      // A pane shows when its checkbox is on AND the selected run touched it.
+      function paneSync() {
+        document.querySelectorAll('.graph-card[data-graph]').forEach((card) => {
+          const cb = document.querySelector('#pane-pick input[data-pane="' + card.dataset.repo + '"]');
+          card.hidden = !((!cb || cb.checked) && (!RUN_REPOS || RUN_REPOS.has(card.dataset.repo)));
+        });
+      }
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.run-btn');
+        if (!btn) { return; }
+        const off = btn.classList.contains('selected');
+        document.querySelectorAll('.run-btn').forEach(o => o.classList.remove('selected'));
+        if (!off) { btn.classList.add('selected'); }
+        applyRun(off ? null : btn);
+      });
 
       // WHICH PANES ARE SHOWN. Unticking hides the card; ticking it back
       // redraws, because a card hidden at load has never been drawn.
       document.querySelectorAll('#pane-pick input[data-pane]').forEach(cb =>
-        cb.addEventListener('change', () => {
-          const card = document.querySelector('.graph-card[data-repo="' + cb.dataset.pane + '"]');
-          if (!card) { return; }
-          card.hidden = !cb.checked;
-          if (cb.checked) { drawChart(card); }
-        }));
+        cb.addEventListener('change', () => { paneSync(); drawAll(); }));
       document.querySelectorAll('.graph-card .repo-pick input[data-plat]').forEach(cb =>
         cb.addEventListener('change', () => drawChart(cb.closest('.graph-card'))));
-      drawAll();
+      applyRun(document.querySelector('.run-btn.selected'));
       window.addEventListener('resize', drawAll);
     </script>
   <?php endif; ?>
@@ -1243,7 +1315,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   </div>
 
   <?php
-  $groups = ['mindsuite' => 'Mind-Suite', 'site' => 'Rest of the site'];
+  $groups = ['mindsuite' => 'MindSuite', 'site' => 'Rest of the site'];
   foreach ($groups as $key => $heading): ?>
     <div class="endpoint-group">
       <h2><?= e($heading) ?></h2>

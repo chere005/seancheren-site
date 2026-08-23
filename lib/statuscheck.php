@@ -38,10 +38,12 @@ $PLATFORMS = [
     'web' => 'Web / server', 'macos' => 'macOS', 'windows' => 'Windows',
     'ios' => 'iOS', 'watchos' => 'watchOS', 'android' => 'Android',
 ];
+// Order is display order — Sean, 2026-08-23: "website should be at the top,
+// then MindSuite (not Mind-Suite), then developer".
 $REPO_GROUPS = [
-    'mindsuite' => ['Mind-Suite', 'Five repos and the apps they ship.'],
-    'developer' => ['Developer', 'Tooling. Nothing ships to a device.'],
     'website'   => ['Website', 'Served from the seancheren.com account.'],
+    'mindsuite' => ['MindSuite', 'Five repos and the apps they ship.'],
+    'developer' => ['Developer', 'Tooling. Nothing ships to a device.'],
 ];
 
 /**
@@ -70,74 +72,74 @@ $REPO_GROUPS = [
  */
 $repos = [
   ['name' => 'CalMind', 'group' => 'mindsuite', 'tag' => 'origin app',
-   'sync' => '<code>seancheren.com/CalMind/api</code> — every client. Also on <code>test.</code>',
+   'sync' => '<code>seancheren.com/CalMind/api/index.php</code><br><code>records</code> space',
    'plat' => [
      'web'     => [0, 'seancheren.com/CalMind'],
      'macos'   => [0, 'desktop app', '/Applications/CalMind.app<br>Tauri shell'],
-     'windows' => [0, 'CI build', 'GitHub Actions<br>green Aug 23'],
+     'windows' => [0, 'CI build', 'GitHub Actions<br>Aug 23'],
      'ios'     => [0, 'verified', 'iPhone<br>Aug 22'],
      'watchos' => [0, 'verified', 'paired Apple Watch<br>Aug 22'],
      'android' => [0, 'verified', 'local emulator<br>Aug 22'],
    ]],
   ['name' => 'ChefMind', 'group' => 'mindsuite', 'tag' => 'split from CalMind',
-   'sync' => 'CalMind\'s API, <code>chef</code> space. No backend of its own.',
+   'sync' => '<code>seancheren.com/CalMind/api/index.php</code><br><code>chef</code> space',
    'plat' => [
      'web'     => [0, 'seancheren.com/ChefMind'],
      'macos'   => [0, 'desktop app', '/Applications/ChefMind.app<br>Tauri shell'],
-     'windows' => [0, 'CI build', 'GitHub Actions<br>green Aug 23'],
+     'windows' => [0, 'CI build', 'GitHub Actions<br>Aug 23'],
      'ios'     => [0, 'verified', 'iPhone<br>Aug 22'],
-     'watchos' => [null, '&mdash;', 'no watch target'],
+     'watchos' => [null, '&mdash;'],
      'android' => [0, 'verified', 'local emulator<br>Aug 22'],
    ]],
   ['name' => 'AcctMind', 'group' => 'mindsuite', 'tag' => 'separate build',
-   'sync' => 'Nothing syncs — the ledger lives in the browser.',
+   'sync' => 'none — ledger in the browser',
    'plat' => [
      'web'     => [0, 'seancheren.com/AcctMind'],
      'macos'   => [0, 'desktop app', '/Applications/AcctMind.app<br>Tauri shell'],
-     'windows' => [0, 'CI build', 'GitHub Actions<br>green Aug 23'],
+     'windows' => [0, 'CI build', 'GitHub Actions<br>Aug 23'],
      'ios'     => [0, 'verified', 'iPhone<br>Aug 22'],
-     'watchos' => [null, '&mdash;', 'no watch target'],
+     'watchos' => [null, '&mdash;'],
      'android' => [0, 'verified', 'local emulator<br>Aug 22'],
    ]],
   ['name' => 'MyCalMind', 'group' => 'mindsuite', 'tag' => 'extracted, renamed',
-   'sync' => 'Bonjour over the LAN — <code>_calmind-local._tcp</code>. No internet, no backup.',
+   'sync' => '<code>_calmind-local._tcp</code><br>Bonjour, LAN only',
    'plat' => [
      'web'     => [null, 'none'],
      'macos'   => [0, 'desktop app', '/Applications/MyCalMind.app<br>Mac Catalyst'],
-     'windows' => [null, '&mdash;', 'no Tauri shell'],
-     'ios'     => [1, 'builds', "not installed &mdash; protects the<br>phone's 3-app cap"],
-     'watchos' => [1, 'builds', 'not installed to a watch'],
+     'windows' => [null, '&mdash;'],
+     'ios'     => [1, 'builds'],
+     'watchos' => [1, 'builds'],
      'android' => [0, 'verified', 'local emulator<br>Aug 22'],
    ]],
   ['name' => 'CoreMind', 'group' => 'mindsuite', 'tag' => 'shared tooling',
-   'sync' => 'Nothing syncs — no app, no data.',
+   'sync' => 'none',
    'plat' => [
      'web' => [null, 'n/a'], 'macos' => [null, 'n/a'], 'windows' => [null, 'n/a'],
      'ios' => [null, 'n/a'], 'watchos' => [null, 'n/a'], 'android' => [null, 'n/a'],
    ]],
 
   ['name' => 'AgentSuite', 'group' => 'developer', 'tag' => 'conventions',
-   'sync' => 'Nothing syncs — text, not an app.',
+   'sync' => 'none',
    'plat' => [
      'web' => [null, 'none'], 'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
    ]],
   ['name' => 'LLMLOCAL', 'group' => 'developer', 'tag' => 'local models',
-   'sync' => 'Nothing syncs — local only.',
+   'sync' => 'none',
    'plat' => [
      'web' => [null, 'none'], 'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
    ]],
 
   ['name' => 'seancheren-site', 'group' => 'website', 'tag' => 'hosting account',
-   'sync' => 'Nothing syncs — server-rendered, no client store.',
+   'sync' => 'none',
    'plat' => [
      'web'     => [0, 'seancheren.com'],
      'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
    ]],
   ['name' => 'aki-tarot', 'group' => 'website', 'tag' => "Aki's, private",
-   'sync' => 'Nothing syncs — server-rendered, no client store.',
+   'sync' => 'none',
    'plat' => [
      'web'     => [0, 'seancheren.com/akitarot'],
      'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
@@ -163,7 +165,10 @@ $repos = [
  * A repo absent from an instance is not a failure, it is an absence: the cell
  * says "not deployed" and the sample records n/a rather than a zero.
  */
-$WEB_INSTANCES = ['prod' => 'seancheren.com', 'test' => 'test.seancheren.com'];
+// dev is on the picker because the alias still exists; nothing is deployed
+// there since /dev/ was retired (2026-08-23), so every cell says so. The
+// button disappears the day the alias does.
+$WEB_INSTANCES = ['prod' => 'seancheren.com', 'test' => 'test.seancheren.com', 'dev' => 'dev.seancheren.com'];
 $WEB_PROBE_AT = [
     'prod' => [
         'CalMind'         => ['https://seancheren.com/CalMind/', 'https://seancheren.com/CalMind/api/index.php'],
@@ -178,6 +183,7 @@ $WEB_PROBE_AT = [
         'AcctMind'        => ['https://test.seancheren.com/AcctMind/'],
         'seancheren-site' => ['https://test.seancheren.com/'],
     ],
+    'dev' => [],
 ];
 // The label a web cell shows for each repo on each instance.
 $WEB_LABEL_AT = [
@@ -190,6 +196,7 @@ $WEB_LABEL_AT = [
         'CalMind' => 'test.&#8203;seancheren.com/CalMind', 'ChefMind' => 'test.&#8203;seancheren.com/ChefMind',
         'AcctMind' => 'test.&#8203;seancheren.com/AcctMind', 'seancheren-site' => 'test.&#8203;seancheren.com',
     ],
+    'dev' => [],
 ];
 // Production stays the default everywhere else in this file, so nothing that
 // asks for "the" web status silently starts answering about the sandbox.
@@ -447,6 +454,23 @@ function check_url(string $url, ?string $post = null): array
 function probe_creds(string $key): ?array
 {
     $all = app_config()['status_probes'] ?? null;
+    /**
+     * THE PROBE ACCOUNT PROVISIONS ITSELF — Sean, 2026-08-23: "top priority,
+     * fix probing and testing automatically on the live status page".
+     *
+     * config.php is hand-kept and nobody was ever going to type credentials
+     * into it. So a one-shot created a dedicated `probe` account with a
+     * machine-generated secret, stored hashed in the account stores like any
+     * user's, and left the plaintext HERE — outside the web root, web-user
+     * 0600, exactly as guarded as config.php itself. The account owns no data
+     * and gates nothing; its one purpose is to prove sign-in works.
+     *
+     * config.php still wins on a clash, so hand-set credentials override.
+     */
+    if (!is_array($all) || !isset($all[$key])) {
+        $auto = @json_decode((string) @file_get_contents('/home/protected/status/probes.json'), true);
+        if (is_array($auto) && isset($auto[$key])) { $all = $auto; }
+    }
     if (!is_array($all) || !isset($all[$key])) { return null; }
     $c = $all[$key];
     return (!empty($c['user']) && !empty($c['pass'])) ? ['user' => (string) $c['user'], 'pass' => (string) $c['pass']] : null;

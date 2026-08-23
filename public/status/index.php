@@ -65,6 +65,30 @@ usort($history, fn($a, $b) => strcmp($b['started_at'] ?? '', $a['started_at'] ??
 $latest = $history[0] ?? null;
 $isRunning = $latest && ($latest['status'] ?? '') === 'running';
 
+/**
+ * WHICH REPOS ARE MID-RELEASE. Sean, 2026-08-23: the purple "should be shown
+ * for every single entry in the current page when a tdtp starts until it turns
+ * back to green or orange etc" — and "i don't want 'A release is going out
+ * right now', i want that shown for every item in the table".
+ *
+ * A sentence in the header is a thing you read once; a table that goes purple
+ * is a thing you watch. So the running state lives in the cells.
+ *
+ * Read from the RUN'S OWN PLAN rather than painting everything: dtp.sh records
+ * the resolved target ("core CalMind ChefMind AcctMind"), so a run that is not
+ * touching MyCalMind does not claim to be. During `tdtp all` that is every
+ * repo, which is the case this was asked for.
+ */
+function running_repos(?array $latest): array
+{
+    if (!$latest || ($latest['status'] ?? '') !== 'running') { return []; }
+    $out = [];
+    foreach (preg_split('/\s+/', trim((string) ($latest['target'] ?? ''))) as $t) {
+        if ($t !== '') { $out[$t === 'core' ? 'CoreMind' : $t] = true; }
+    }
+    return $out;
+}
+
 // severity: 0 = live/good, 1 = done/deliberate, 2 = partial/small issue, 3 = crit/needs attention
 function severity_chip_class(int $sev): string
 {
@@ -585,12 +609,19 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
     }
     if ($rough) {
         $title = count($rough) === 1 ? 'Up, with one rough edge' : 'Up, with ' . count($rough) . ' rough edges';
-        return [$title, ucfirst($rough[0]) . (count($rough) > 1 ? ', and ' . (count($rough) - 1) . ' more' : '') . '. Nothing is down.', 'partial'];
+        return [$title, ucfirst($rough[0]) . (count($rough) > 1 ? ', and ' . (count($rough) - 1) . ' more' : ''), 'partial'];
     }
-    if ($isRunning) { return ['A release is going out right now', 'Everything that has finished is up.', 'running']; }
     return ['Everything is up', '', 'live'];
 }
 [$hlTitle, $hlDek, $hlKind] = status_headline($repos, $endpoints, $results, (bool) $isRunning);
+$RUNNING = running_repos($latest);
+
+/** A cell's chip class — purple for the whole of a repo that is mid-release. */
+function cell_chip(?int $sev, string $repo, array $running): string
+{
+    if (isset($running[$repo])) { return 'running'; }
+    return $sev === null ? 'none' : severity_chip_class($sev);
+}
 
 ?>
 <!doctype html>
@@ -802,6 +833,7 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
 
   .repo-name { font-weight: 650; font-size: 0.95rem; letter-spacing: -0.005em; }
   .repo-tag { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-faint); }
+  .running-tag { color: var(--running); animation: pulse 1.4s ease-in-out infinite; }
 
   .prose { color: var(--ink-soft); }
   .prose strong { color: var(--ink); font-weight: 600; }
@@ -969,21 +1001,12 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
           // a red table is worse than no headline, so this can only say
           // everything is fine when the live checks and the matrix both do. ?>
     <h1 class="hl-<?= $hlKind ?>"><span class="hl-dot"></span><?= $hlTitle ?></h1>
-    <p class="dek">
-      <?php if ($hlDek !== ''): ?><strong><?= $hlDek ?></strong> <?php endif; ?>
-      <?php // Counted, not arithmetic on COUNT_RECURSIVE — that counted every
-            // field of every endpoint and reported 133 of them. ?>
-      <?php $epCount = 0; $domCount = [];
-        foreach ($endpoints as $domains) { foreach ($domains as $dom => $list) { $epCount += count($list); $domCount[$dom] = true; } } ?>
-      <?= $epCount ?> endpoints checked every <?= $cacheTtl ?>s across <?= count($domCount) ?> domains.
-      <?php // Derived, never typed. A hardcoded date on a status page is wrong the
-            // day after it is written, and wrong in the one way nobody checks. ?>
-      <?= $isRunning
-        ? ''
-        : ($latest && !empty($latest['finished_at'])
-            ? 'Last release ' . e($latest['finished_at']) . '.'
-            : 'No release recorded yet.') ?>
-    </p>
+    <?php // A dek ONLY when there is something to say. It used to carry an
+          // endpoint count and a domain count under a headline that had already
+          // answered the question — Sean, 2026-08-23: "FLUFF". When everything
+          // is up the headline is the whole message; when it is not, this names
+          // what and nothing else. ?>
+    <?php if ($hlDek !== ''): ?><p class="dek"><?= $hlDek ?></p><?php endif; ?>
   </header>
 
   <div class="tabs">
@@ -1032,17 +1055,19 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
             <tr<?= $gkey === 'mindsuite' ? '' : ' class="outside"' ?>>
               <td>
                 <span class="repo-name"><?= e($r['name']) ?></span>
-                <span class="repo-tag"><?= e($r['tag']) ?></span>
+                <span class="repo-tag"><?= isset($RUNNING[$r['name']])
+                  ? '<span class="running-tag">' . e(($latest['kind'] ?? 'dtp')) . ' running…</span>'
+                  : e($r['tag']) ?></span>
               </td>
               <?php // Web leads, then the prose, then the five device columns —
                     // the same order the matrix stores them in. ?>
               <?php $cell = $r['plat']['web']; ?>
-              <td><span class="chip <?= $cell[0] === null ? 'none' : severity_chip_class((int) $cell[0]) ?>"><?= $cell[1] ?></span></td>
+              <td><span class="chip <?= cell_chip($cell[0], $r['name'], $RUNNING) ?>"><?= $cell[1] ?></span></td>
               <td class="prose"><?= $r['sync'] ?></td>
               <?php foreach (['macos', 'windows', 'ios', 'watchos', 'android'] as $plat):
                 $c = $r['plat'][$plat] ?? [null, '&mdash;']; ?>
                 <td>
-                  <span class="chip <?= $c[0] === null ? 'none' : severity_chip_class((int) $c[0]) ?>"><?= $c[1] ?></span>
+                  <span class="chip <?= cell_chip($c[0], $r['name'], $RUNNING) ?>"><?= $c[1] ?></span>
                   <?php if (!empty($c[2])): ?><span class="cell-note"><?= $c[2] ?></span><?php endif; ?>
                 </td>
               <?php endforeach; ?>

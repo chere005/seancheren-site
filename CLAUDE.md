@@ -28,6 +28,8 @@ Deleted with it, because nothing else used them: `lib/{tabbar,folders,sharing,pa
 ```sh
 php -S 127.0.0.1:8787 -t public          # local server
 php tools/test.php                       # the test run — see TESTING.md
+php tools/test.php --list                # the area names, with the case count of each
+php tools/test.php auth signup           # only areas whose name contains one of these
 find public lib tools -name '*.php' -exec php -l {} \;   # lint everything
 ./deploy.sh --dry-run                    # preview the (test) deploy, touch nothing
 ./deploy.sh                              # lint, then rsync to the TEST instance (/test/)

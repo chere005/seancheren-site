@@ -312,7 +312,10 @@ function cell_chip(?int $sev, string $repo, array $running): string
   }
 
   .page {
-    max-width: 1640px;
+    /* Wide enough that the platform matrix stops needing a scrollbar on a
+       big screen. The cap still exists — prose at 2000px is unreadable — but
+       it sits above the widest thing on the page rather than below it. */
+    max-width: 1800px;
     margin: 0 auto;
     /* 20px of top padding, not 56 — the eyebrow row IS the top of the page now
        and there is nothing above it to make room for. */
@@ -447,13 +450,16 @@ function cell_chip(?int $sev, string $repo, array $running): string
      and scrolls. It was on every table, so the Usage table — seven narrow
      columns that fit twice over — was forced into a horizontal scrollbar for
      space it did not want. */
-  .table-card .table-scroll > table:not(.usage-table) { min-width: 1420px; }
+  /* The floor is the SUM of the tracks below, not a guess: they disagreed
+     (1420 against 1610), so the table could never actually fit its own
+     columns and the scrollbar never went away however wide the window got. */
+  .table-card .table-scroll > table:not(.usage-table) { min-width: 1508px; }
 
-  col.repo { width: 168px; }
-  col.web  { width: 210px; }
+  col.repo { width: 164px; }
+  col.web  { width: 208px; }
   /* Was 420px, when this column held a paragraph each. It holds one line now. */
-  col.sync { width: 292px; }
-  col.plat { width: 188px; }
+  col.sync { width: 288px; }
+  col.plat { width: 169px; }   /* ×5 — the five device columns */
 
   thead th {
     position: sticky; top: 0; background: var(--surface-alt); text-align: left;
@@ -726,9 +732,21 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .win-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
   .gk-lane { color: var(--ink-faint); font-family: var(--font-mono); font-size: 0.68rem; }
 
+  /* The instant tooltip. Fixed, so the chart's own box can never clip it. */
+  .evt-tip {
+    position: fixed; z-index: 90; pointer-events: none; white-space: pre-line;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; font-size: 0.76rem; line-height: 1.4;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); max-width: 280px;
+  }
+  .evt-tip[hidden] { display: none; }
+  .evt { cursor: pointer; }
+
   .graph-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; }
   .gk { display: inline-flex; align-items: center; gap: 7px; font-size: 0.76rem; color: var(--ink-soft); }
   .gk i { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+  .gk i.gk-mix { display: inline-flex; overflow: hidden; }
+  .gk i.gk-mix b { flex: 1; height: 3px; }
 
   .graph-axis {
     display: flex; justify-content: space-between; margin-top: 4px;
@@ -1206,10 +1224,39 @@ function cell_chip(?int $sev, string $repo, array $running): string
        * state it is in — including the ones that did not move. Without that,
        * "nothing else changed" and "nothing else was recorded" looked alike.
        */
-      const GROUP_COLORS = [
-        '#5fb6ac', '#f0b429', '#8fa3e0', '#d98cc0', '#9ad17a',
-        '#e08a5f', '#c58ef0', '#6fd0d8', '#e2725b', '#b9c86a',
-      ];
+      /**
+       * A COLOUR PER PLATFORM, and one for ALL — Sean, 2026-08-23: "make a
+       * color for all so the history is easier to read (checking legend gives
+       * the info enough)".
+       *
+       * Colouring by arbitrary GROUP meant the same platform changed colour
+       * every time its company did, so nothing on the chart was stable enough
+       * to learn. Now web is always teal and iOS always pink, the full set
+       * moving together gets its own neutral, and a mixed subset is drawn as a
+       * pie of its members' colours rather than a colour of its own.
+       */
+      /**
+       * PASTELS ONLY — Sean, 2026-08-23: "make all the colors nice pastel
+       * colors.. not things like yellow or red that make it look like
+       * something bad is happening". On a status page a saturated amber or
+       * red is a WORD, not a hue: it means attention. These six identify a
+       * platform and nothing more, so they must stay out of that vocabulary —
+       * which the band colours behind them own.
+       */
+      const PLAT_COLOR = {
+        web:     '#7fd4c8',   // aqua
+        macos:   '#b6c8f0',   // periwinkle
+        windows: '#a8b8e8',   // lilac-blue
+        ios:     '#e6b3d4',   // rose
+        watchos: '#b3ddb0',   // mint
+        android: '#d9c2e8',   // lavender
+      };
+      const ALL_COLOR = '#cfd6dc';   // every platform, in step — the calm case
+
+
+      // Attribute-safe: the tip carries newlines and app names.
+      const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                                  .replace(/</g, '&lt;').replace(/\n/g, '&#10;');
 
       function drawChart(card) {
         const svg = card.querySelector('svg.statechart');
@@ -1293,11 +1340,19 @@ function cell_chip(?int $sev, string $repo, array $running): string
         // stable for as long as that set travels together. Two groups that
         // happen to share a state at different times keep their own colours;
         // the same set reappearing gets its old one back.
-        const colorOf = {}; let ci = 0;
+        const colorOf = {};
         const gkey = (members) => members.slice().sort().join('+');
+        // One platform → its own colour. Every platform → the "all" neutral.
+        // A subset → the first member's colour for the LINE (the dot is a pie
+        // of all of them, which is where the detail belongs).
+        const colorFor = (members) => {
+          if (members.length === 1) { return PLAT_COLOR[members[0]] || '#9c978d'; }
+          if (members.length === plats.length) { return ALL_COLOR; }
+          return PLAT_COLOR[members.slice().sort()[0]] || '#9c978d';
+        };
         groupsAt.forEach(g => Object.keys(g).sort((a, b) => a - b).forEach((sev) => {
           const k = gkey(g[sev]);
-          if (!(k in colorOf)) { colorOf[k] = GROUP_COLORS[ci++ % GROUP_COLORS.length]; }
+          if (!(k in colorOf)) { colorOf[k] = colorFor(g[sev]); }
         }));
 
         // The horizontal runs: one per group per sample.
@@ -1384,14 +1439,38 @@ function cell_chip(?int $sev, string $repo, array $running): string
           if (mine[i].t < t0 || mine[i].t > t1) { return; }
           const cx = x(mine[i].t);
           Object.keys(g).forEach((sevStr) => {
-            const sev = +sevStr, members = g[sevStr], c = colorOf[gkey(members)];
+            const sev = +sevStr, members = g[sevStr], cy = y(sev);
             const R = members.length > 1 ? 6.5 : 5;
             const names = members.map(p => PLATFORMS[p]).join(', ');
             const tip = names + '\n' + SEV_LABEL[sev] + '\nchecked ' + fmtF(mine[i].t) +
                         (i === 0 ? '\n(first recorded)' : '');
-            out += '<circle cx="' + cx + '" cy="' + y(sev) + '" r="' + R + '" fill="' + c +
-                   '" stroke="var(--surface)" stroke-width="1.5"><title>' + tip + '</title></circle>';
-
+            // A SUBSET IS DRAWN AS A PIE OF ITS MEMBERS — Sean, 2026-08-23:
+            // "pie charts for dots that are some subset of colors and the
+            // color itself if it's just one platform". One platform is its own
+            // colour; the whole set is the calm neutral, because six equal
+            // slices is a pattern rather than a fact; anything between is a
+            // pie, which says WHICH platforms are here without a lookup.
+            const solid = members.length === 1 || members.length === plats.length;
+            if (solid) {
+              out += '<circle class="evt" cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="' +
+                     colorOf[gkey(members)] + '" stroke="var(--surface)" stroke-width="1.5" ' +
+                     'data-tip="' + esc(tip) + '"><title>' + tip + '</title></circle>';
+            } else {
+              const step = (Math.PI * 2) / members.length;
+              let a0 = -Math.PI / 2;
+              members.slice().sort().forEach((m) => {
+                const a1 = a0 + step;
+                const p0 = [cx + R * Math.cos(a0), cy + R * Math.sin(a0)];
+                const p1 = [cx + R * Math.cos(a1), cy + R * Math.sin(a1)];
+                out += '<path class="evt" d="M ' + cx + ' ' + cy + ' L ' + p0[0] + ' ' + p0[1] +
+                       ' A ' + R + ' ' + R + ' 0 ' + (step > Math.PI ? 1 : 0) + ' 1 ' +
+                       p1[0] + ' ' + p1[1] + ' Z" fill="' + (PLAT_COLOR[m] || '#9c978d') +
+                       '" data-tip="' + esc(tip) + '"><title>' + tip + '</title></path>';
+                a0 = a1;
+              });
+              out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + R +
+                     '" fill="none" stroke="var(--surface)" stroke-width="1.5"/>';
+            }
           });
         });
 
@@ -1408,11 +1487,51 @@ function cell_chip(?int $sev, string $repo, array $running): string
           const k = gkey(g[sev]);
           if (seen.has(k)) { return; }
           seen.add(k);
-          keyHtml += '<span class="gk"><i style="background:' + colorOf[k] + '"></i>' +
-                     g[sev].map(p => PLATFORMS[p]).join(' + ') + '</span>';
+          const mem = g[sev];
+          // A mixed subset has no single colour — its key entry shows the same
+          // slices the dot does, so the two read as the same thing.
+          const swatch = (mem.length === 1 || mem.length === plats.length)
+            ? '<i style="background:' + colorOf[k] + '"></i>'
+            : '<i class="gk-mix">' + mem.slice().sort().map(m =>
+                '<b style="background:' + (PLAT_COLOR[m] || '#9c978d') + '"></b>').join('') + '</i>';
+          keyHtml += '<span class="gk">' + swatch +
+                     (mem.length === plats.length ? 'all platforms' : mem.map(p => PLATFORMS[p]).join(' + ')) +
+                     '</span>';
         }));
         card.querySelector('.graph-key').innerHTML = keyHtml;
       }
+
+      /**
+       * AN INSTANT TOOLTIP — Sean, 2026-08-23: "tooltip for what happened at
+       * the event should come up quicker". The SVG `<title>` element is the
+       * OS's tooltip and waits about a second before appearing, which on a
+       * chart you are scrubbing across is long enough to give up on. This
+       * shows the same text on hover with no delay; the `<title>` stays as the
+       * fallback for a page reached without JS and for screen readers, which
+       * is why both are emitted rather than one replacing the other.
+       */
+      const tipBox = document.createElement('div');
+      tipBox.className = 'evt-tip';
+      tipBox.hidden = true;
+      document.body.appendChild(tipBox);
+      document.addEventListener('mouseover', (e) => {
+        const el = e.target.closest && e.target.closest('.evt');
+        if (!el) { return; }
+        tipBox.textContent = el.dataset.tip || '';
+        tipBox.hidden = false;
+        const r = el.getBoundingClientRect();
+        const bw = tipBox.offsetWidth, bh = tipBox.offsetHeight;
+        let left = r.left + r.width / 2 - bw / 2;
+        left = Math.max(8, Math.min(left, window.innerWidth - bw - 8));
+        let top = r.top - bh - 10;
+        if (top < 8) { top = r.bottom + 10; }
+        tipBox.style.left = Math.round(left) + 'px';
+        tipBox.style.top  = Math.round(top) + 'px';
+      });
+      document.addEventListener('mouseout', (e) => {
+        if (e.target.closest && e.target.closest('.evt')) { tipBox.hidden = true; }
+      });
+      document.addEventListener('scroll', () => { tipBox.hidden = true; }, true);
 
       function drawAll() { document.querySelectorAll('.graph-card[data-graph]').forEach(c => { if (!c.hidden) { drawChart(c); } }); }
 

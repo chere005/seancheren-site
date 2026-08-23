@@ -145,8 +145,6 @@ Dark by default, themed throughout. Pill-shaped controls. Shared chrome comes fr
 - **`/calmind/` is not this repo's.** It belongs to the CalMind monorepo and its own
   deploy. `deploy.sh` excludes it on both the push and the promote; do not remove either
   exclusion, and do not add anything at that path.
-- **Two sessions share this repo.** `git pull --autostash` first — another agent's
-  half-finished work must not ride along on your commit.
 - **Production is never touched unless Sean says so in that message.** A bare
   `./deploy.sh` is test-only for exactly this reason. A fix goes to test and prod
   together; a feature goes to test and waits for him before `promote`.

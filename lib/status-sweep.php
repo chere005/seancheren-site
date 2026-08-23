@@ -26,63 +26,29 @@
  * a probe account and belongs on a slow clock — every six hours, not every
  * thirty seconds, because a login attempt is a thing that shows up in logs and
  * rate limits and should stay rare enough to mean something.
+ *
+ * IT DOES NOT SWEEP TWICE. This file used to run its own loop over every
+ * endpoint AFTER including statuscheck.php, which sweeps on include — so a
+ * scheduled run made 36 requests to make 18 checks, and the sample recorded
+ * was from the second set. It now asks statuscheck to do the one sweep, by
+ * setting the same two forces the page's "Check now" sets.
  */
 
 $lib = __DIR__;
 require_once $lib . '/auth.php';          // app_config(), for the probe credentials
-require_once $lib . '/statuscheck.php';
 
-$withLogins = in_array('--logins', $argv, true);
+// Set BEFORE the include, because statuscheck.php sweeps as it loads.
+$GLOBALS['STATUS_FORCE_SWEEP']  = true;                                  // always
+$GLOBALS['STATUS_FORCE_LOGINS'] = in_array('--logins', $argv, true);     // the slow clock
 
-$results = [];
-foreach ($endpoints as $group => $domains) {
-    foreach ($domains as $list) {
-        foreach ($list as $ep) {
-            $results[$group][$ep['url']] = check_url($ep['url'], $ep['post'] ?? null);
-        }
-    }
-}
-
-// The sign-ins, only when asked. On the fast clock the previous verdict is
-// carried forward rather than dropped: a Sign-in column that blanked every
-// thirty minutes would read as "we stopped knowing", which is not what
-// happened — nothing was asked.
-$prev = is_file($cachePath) ? json_decode((string) file_get_contents($cachePath), true) : null;
-foreach (auth_scopes() as $key => $sc) {
-    if ($sc['probe'] === null) { $results['scopes'][$key] = null; continue; }
-    $results['scopes'][$key] = $withLogins
-        ? check_login($sc['probe'])
-        : ($prev['scopes'][$key] ?? null);
-}
-
-$results['checked_at'] = time();
-if ($withLogins) { $results['logins_checked_at'] = time(); }
-elseif (isset($prev['logins_checked_at'])) { $results['logins_checked_at'] = $prev['logins_checked_at']; }
-
-@mkdir(dirname($cachePath), 0770, true);
-@file_put_contents($cachePath, json_encode($results));
-@chmod($cachePath, 0664);
-
-// Which repos are mid-release, so the sample can record the purple state.
-// Read from the same history file the page draws its run list from.
-$runningNow = [];
-$hist = @json_decode((string) @file_get_contents('/home/protected/status/history.json'), true);
-if (is_array($hist)) {
-    usort($hist, fn($a, $b) => strcmp((string) ($b['started_at'] ?? ''), (string) ($a['started_at'] ?? '')));
-    if (($hist[0]['status'] ?? '') === 'running') {
-        foreach (preg_split('/\s+/', trim((string) ($hist[0]['target'] ?? ''))) as $t) {
-            if ($t !== '') { $runningNow[$t === 'core' ? 'CoreMind' : $t] = true; }
-        }
-    }
-}
-status_sample_record(status_sample_row($repos, $WEB_PROBE, $endpoints, $results, $runningNow));
+require_once $lib . '/statuscheck.php';   // sweeps, probes, records the sample
 
 // One line out, so a scheduled task's mail (or a dtp's log) says what happened
 // rather than nothing at all.
 $down = 0; $total = 0;
 foreach ($results as $g => $rows) {
     if (!is_array($rows) || in_array($g, ['scopes', 'checked_at', 'logins_checked_at'], true)) { continue; }
-    foreach ($rows as $r) { $total++; if (empty($r['ok'])) { $down++; } }
+    foreach ($rows as $r) { if (is_array($r)) { $total++; if (empty($r['ok'])) { $down++; } } }
 }
 printf("%s  %d/%d up%s\n", date('Y-m-d g:i:s a T'), $total - $down, $total,
-       $withLogins ? '  (sign-ins probed)' : '');
+       $GLOBALS['STATUS_FORCE_LOGINS'] ? '  (sign-ins probed)' : '');

@@ -230,8 +230,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
     --live: #1f8a4c;
     --live-bg: #e4f5ea;
-    --done: #4f9c6e;
-    --done-bg: #eaf6ee;
+    --done: #2c6fd1;
+    --done-bg: #e6eefb;
     --partial: #a86a15;
     --partial-bg: #fbeeda;
     --crit: #c22f2f;
@@ -262,8 +262,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
       --live: #4fd183;
       --live-bg: #16311f;
-      --done: #7dc79a;
-      --done-bg: #1a2e22;
+      --done: #77aef2;
+      --done-bg: #17263a;
       --partial: #e8a94b;
       --partial-bg: #3a2c15;
       --crit: #f0605c;
@@ -341,6 +341,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
     letter-spacing: -0.01em;
     text-wrap: balance;
   }
+
+  .triggered { margin-top: 6px; font-size: 0.95rem; color: var(--ink-soft); }
+  .triggered strong { color: var(--ink); font-weight: 600; }
 
   .dek { margin: 0; max-width: 62ch; font-size: 1.02rem; line-height: 1.55; color: var(--ink-soft); }
   .dek strong { color: var(--ink); font-weight: 600; }
@@ -505,6 +508,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   .graph-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
   .graph-empty { color: var(--ink-faint); font-size: 0.88rem; padding: 40px 0; text-align: center; }
+  /* An empty state is one line, not a 160px card pretending something is
+     there. */
+  .none-yet { margin: 0; color: var(--ink-faint); font-size: 0.85rem; }
 
 
   /* ---------- live status tab ---------- */
@@ -514,11 +520,25 @@ function cell_chip(?int $sev, string $repo, array $running): string
     margin: 0; padding: 14px 18px; font-size: 0.95rem; font-weight: 650;
     background: var(--surface-alt); border-bottom: 1px solid var(--line);
   }
+  /* Two shapes, because the two subsections answer different questions: a
+     gated row has a sign-in and a scope, a public one has neither and used to
+     carry two columns of "n/a" to prove it. */
   .endpoint-row {
-    display: grid; grid-template-columns: 1.4fr 80px 128px 116px 128px 1.4fr; gap: 14px;
+    display: grid; grid-template-columns: 1.6fr 80px 108px 116px 150px; gap: 14px;
     padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: start; font-size: 0.85rem;
   }
+  /* The public rows keep the SAME tracks and simply leave two of them empty,
+     so Endpoint, Status and Response line up down the whole domain instead of
+     the two subsections looking like two unrelated tables. */
+  .sec-open .endpoint-row > [data-col="2"],
+  .sec-open .endpoint-ms { grid-column: 4; }
   .endpoint-row:last-child { border-bottom: none; }
+  .sec + .sec { margin-top: 4px; }
+  .sec-head {
+    font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-faint);
+    padding: 12px 18px 0;
+  }
   .endpoint-head {
     font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--ink-faint); padding-top: 8px; padding-bottom: 8px;
@@ -545,29 +565,22 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .group-head h2 { margin: 0; font-size: 1rem; font-weight: 650; }
   .group-head p { margin: 4px 0 0; font-size: 0.82rem; color: var(--ink-soft); }
 
-  .graph-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
-  .graph-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-  .repo-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .graph-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
+  .graph-head h2 { margin: 0; font-size: 0.95rem; font-weight: 650; display: flex; align-items: baseline; gap: 9px; }
+  .graph-group {
+    font-family: var(--font-mono); font-size: 0.66rem; font-weight: 400;
+    letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-faint);
+  }
 
-  /* IN or OUT, said twice: the tick/cross glyph and the fill. Sean, 2026-08-23
-     — "there should be a visual indicator on each repo button in history
-     whether it's included or excluded". A pill that only changed shade left
-     you guessing which way round it was. */
-  .repo-tab {
-    display: inline-flex; align-items: center; gap: 6px;
-    font: inherit; font-size: 0.78rem; cursor: pointer;
-    border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px;
-    background: transparent; color: var(--ink-faint);
-    text-decoration: line-through; text-decoration-color: var(--ink-faint);
+  /* The pane picker sits above the stack it controls, and says how many panes
+     there are so an all-unticked list is obviously a choice, not a break. */
+  .pane-controls { display: flex; align-items: center; gap: 12px; }
+  .pane-count { font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-faint); }
+  .pick-head {
+    font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-faint); padding: 8px 8px 3px;
   }
-  .repo-tab::before { content: "✕"; font-size: 0.72rem; opacity: 0.8; }
-  .repo-tab:hover { border-color: var(--ink-soft); color: var(--ink-soft); }
-  .repo-tab.on {
-    background: var(--accent-soft); border-color: var(--accent);
-    color: var(--accent); text-decoration: none; font-weight: 600;
-  }
-  .repo-tab.on::before { content: "✓"; opacity: 1; }
-  .graph-head h2 { margin: 0; font-size: 0.95rem; font-weight: 650; }
+  .repo-pick-menu .pick-head:first-child { padding-top: 2px; }
   .graph-axis {
     display: flex; justify-content: space-between; margin-top: 4px;
     font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-faint);
@@ -592,6 +605,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
     border-radius: 6px; font-size: 0.85rem; cursor: pointer;
   }
   .repo-pick-menu label:hover { background: var(--surface-alt); }
+  /* The pane picker opens leftwards — it sits at the left edge, and the
+     shared rule anchors to the right for the per-pane platform menus. */
+  #pane-pick .repo-pick-menu { right: auto; left: 0; max-height: 62vh; overflow-y: auto; }
   .repo-pick-menu .dot { width: 10px; height: 3px; border-radius: 2px; flex: none; }
   .endpoint-url { font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-faint); word-break: break-all; }
   .endpoint-auth { color: var(--ink-soft); line-height: 1.4; }
@@ -611,12 +627,15 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   <header>
     <div class="eyebrow-row">
-      <div class="eyebrow">Mind-Suite &middot; deploy &amp; sync status<?= $latest
-        ? ' &middot; last triggered ' . e(ctFull($latest['started_at'] ?? '')) . ' (' . e($latest['target'] ?? '?') . ')'
-        : ' &middot; no release recorded yet' ?></div>
+      <div class="eyebrow">Mind-Suite &middot; deploy &amp; sync status</div>
       <span class="live-stamp" id="live-stamp">live</span>
       <a href="?logout">Log out</a>
     </div>
+    <?php // The release is its own line and reads bigger than the label above
+          // it — it is the fact, not the page's name. ?>
+    <div class="triggered"><?= $latest
+      ? 'Last triggered <strong>' . e(ctFull($latest['started_at'] ?? '')) . '</strong> &middot; ' . e($latest['target'] ?? '?')
+      : 'No release recorded yet' ?></div>
     <?php // No headline. "Everything is up" with a dot beside it said nothing
           // the table below does not say better, and it said it in the one
           // place a person looks first. The dek survives only for the case
@@ -695,12 +714,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
       <?php // ONE vocabulary for the whole page — the same five words the
             // History axis uses, so a band there and a chip here mean the same
             // thing without translation. ?>
-      <div class="legend-item"><span class="swatch running"></span> <strong>In Progress</strong> — a dtp/tdtp is shipping it right now</div>
-      <div class="legend-item"><span class="swatch live"></span> <strong>Operational</strong> — installed and seen working</div>
-      <div class="legend-item"><span class="swatch done"></span> <strong>Build Only</strong> — builds, deliberately not installed</div>
-      <div class="legend-item"><span class="swatch partial"></span> <strong>Issue for Claude</strong> — known, and mine to fix</div>
-      <div class="legend-item"><span class="swatch crit"></span> <strong>Needs Attention</strong> — yours to look at</div>
-      <div class="legend-item"><span class="swatch none"></span> n/a — no such target</div>
+      <div class="legend-item"><span class="swatch running"></span> <strong>In Progress</strong> — shipping now</div>
+      <div class="legend-item"><span class="swatch live"></span> <strong>Operational</strong> — installed, seen working</div>
+      <div class="legend-item"><span class="swatch done"></span> <strong>Build Only</strong> — builds, not installed</div>
+      <div class="legend-item"><span class="swatch partial"></span> <strong>Issue for Claude</strong> — mine to fix</div>
+      <div class="legend-item"><span class="swatch crit"></span> <strong>Needs Attention</strong> — yours</div>
+      <div class="legend-item"><span class="swatch none"></span> <strong>n/a</strong> — no such target</div>
     </div>
     <?php endif; ?>
   </div>
@@ -713,23 +732,44 @@ function cell_chip(?int $sev, string $repo, array $running): string
   <div class="tab-panel" id="tab-history">
   <?php
   /**
-   * ONE REPO AT A TIME, and the picker chooses PLATFORMS — Sean, 2026-08-23.
-   * Nine repos times six platforms is fifty-four lines on one chart, which is
-   * a picture of nothing. One repo is six lines, each a platform, each its own
-   * colour.
+   * ONE CHART PER REPO, each with its own platform picker — Sean, 2026-08-23:
+   * "every single repo should have its own lineplot in history with a platform
+   * dropdown for each one".
    *
-   * Drawn in JS from the samples below rather than in PHP, so switching repo
-   * or unticking a platform is instant and needs no round trip — and so the
-   * live update can redraw from fresh data without reloading anything.
+   * It was one chart per GROUP with repo toggles inside it, which meant the
+   * five Mind-suite repos shared six colours: a colour said "iOS" but nothing
+   * said which repo's iOS, so two repos diverging looked like one line that
+   * forked. A chart per repo makes colour mean platform and nothing else, and
+   * a pane is then readable on its own without a legend lookup.
+   *
+   * WHICH PANES ARE SHOWN is a picker at the top, because nine panes stacked
+   * is a scroll, not a comparison.
+   *
+   * Drawn in JS from the samples below rather than in PHP, so unticking a
+   * platform is instant and needs no round trip — and so the live update can
+   * redraw from fresh data without reloading anything.
    *
    * The x axis is TIME and the samples are state CHANGES, so a long calm
    * stretch is wide and a burst of change is dense. Every dot is an event.
    */
   $samples = status_samples();
-  $byGroup = [];
-  foreach ($repos as $r) {
-      foreach (array_keys($r['plat']) as $plat) {
-          if (isset($samples[0]['s'][$r['name'] . '.' . $plat])) { $byGroup[$r['group']][$r['name']] = true; break; }
+
+  // Which repo.platform keys the samples actually carry — across ALL of them,
+  // not just the first. A platform that gained a target mid-history exists,
+  // and reading only sample zero would have hidden its pane for ever.
+  $seenKeys = [];
+  foreach ($samples as $smp) {
+      foreach (array_keys($smp['s'] ?? []) as $k) { $seenKeys[$k] = true; }
+  }
+  $panes = [];
+  foreach ($REPO_GROUPS as $gkey => [$gname, $gdek]) {
+      foreach ($repos as $r) {
+          if ($r['group'] !== $gkey) { continue; }
+          $pl = [];
+          foreach (array_keys($PLATFORMS) as $plat) {
+              if (isset($seenKeys[$r['name'] . '.' . $plat])) { $pl[] = $plat; }
+          }
+          if ($pl) { $panes[$r['name']] = ['group' => $gname, 'plats' => $pl]; }
       }
   }
   ?>
@@ -749,53 +789,88 @@ function cell_chip(?int $sev, string $repo, array $running): string
       android: { c: '#e08a5f' },
     };
     // THE Y AXIS, top to bottom, each in the colour the legend uses for it.
-    // `releasing` is above `fine` because it is not a degree of broken.
+    // `releasing` is above `fine` because it is not a degree of broken, and
+    // `n/a` is below everything because it is not on the scale at all.
     const BANDS = [
-      { sev: 4, label: 'In Progress',      color: 'var(--running)' },
-      { sev: 0, label: 'Operational',      color: 'var(--live)' },
-      { sev: 1, label: 'Build Only',       color: 'var(--done)' },
-      { sev: 2, label: 'Issue for Claude', color: 'var(--partial)' },
-      { sev: 3, label: 'Needs Attention',  color: 'var(--crit)' },
+      { sev:  4, label: 'In Progress',      color: 'var(--running)' },
+      { sev:  0, label: 'Operational',      color: 'var(--live)' },
+      { sev:  1, label: 'Build Only',       color: 'var(--done)' },
+      { sev:  2, label: 'Issue for Claude', color: 'var(--partial)' },
+      { sev:  3, label: 'Needs Attention',  color: 'var(--crit)' },
+      { sev: -1, label: 'n/a',              color: 'var(--none)' },
     ];
     const BAND_AT = {}; BANDS.forEach((b, i) => { BAND_AT[b.sev] = i; });
     const SEV_LABEL = {}; BANDS.forEach(b => { SEV_LABEL[b.sev] = b.label; });
   </script>
 
-  <?php if (!$samples): ?>
-    <div class="graph-card">
-      <div class="graph-empty">
-        No samples yet. One is recorded whenever the state CHANGES — a sweep
-        finding everything as it was just extends the current one.
-      </div>
-    </div>
+  <?php // THE RUN CARDS COME FIRST — Sean, 2026-08-23: "the cards for which
+        // release is being shown should be above the charts". The charts are
+        // read in the context of a release, so the release is the heading. ?>
+  <?php if (empty($history)): ?>
+    <p class="none-yet">No runs recorded yet.</p>
   <?php else: ?>
-    <?php foreach ($REPO_GROUPS as $gkey => [$gname, $gdek]):
-      $rn = array_keys($byGroup[$gkey] ?? []);
-      if (!$rn) { continue; }
-      $gid = 'g' . $gkey; ?>
-      <div class="graph-card" data-graph="<?= $gid ?>">
+    <div class="run-buttons" data-live="runs">
+      <?php foreach ($history as $i => $run):
+        $sev = (int) ($run['severity'] ?? 3);
+        $isRun = ($run['status'] ?? '') === 'running';
+        $cls = $isRun ? 'running' : severity_chip_class($sev);
+      ?>
+        <button class="run-btn<?= $i === 0 ? ' selected' : '' ?>" data-run="<?= $i ?>">
+          <span class="t"><?= e(ctFull($run['started_at'] ?? '?')) ?></span>
+          <?php // The separator is OUTSIDE e(): escaping '&middot;' turns its own
+                // ampersand into &amp; and the button reads a literal "&middot;". ?>
+          <span class="k"><?= e($run['kind'] ?? 'dtp') ?> &middot; <?= e($run['target'] ?? '?') ?></span>
+          <span class="k"><?= $isRun
+            ? 'started ' . e(ct($run['started_at'] ?? '', 'g:i a'))
+            : (!empty($run['finished_at'])
+                ? 'ended ' . e(ct($run['finished_at'], 'g:i a'))
+                : 'no end recorded') ?></span>
+          <span class="chip <?= $cls ?>"><?= $isRun ? 'running' : e($run['status'] ?? '?') ?></span>
+        </button>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+
+  <?php if (!$samples): ?>
+    <p class="none-yet">No samples yet.</p>
+  <?php else: ?>
+    <?php // WHICH PANES ARE SHOWN, at the top, grouped the way the Current tab
+          // groups them so the two tabs can be read against each other. ?>
+    <div class="pane-controls">
+      <details class="repo-pick" id="pane-pick">
+        <summary>Charts <span class="caret">&#9662;</span></summary>
+        <div class="repo-pick-menu">
+          <?php $lastGroup = null; foreach ($panes as $name => $p): ?>
+            <?php if ($p['group'] !== $lastGroup): $lastGroup = $p['group']; ?>
+              <div class="pick-head"><?= e($p['group']) ?></div>
+            <?php endif; ?>
+            <label><input type="checkbox" checked data-pane="<?= e($name) ?>"><?= e($name) ?></label>
+          <?php endforeach; ?>
+        </div>
+      </details>
+      <span class="pane-count"><?= count($panes) ?> repos</span>
+    </div>
+
+    <?php foreach ($panes as $name => $p): ?>
+      <div class="graph-card" data-graph data-repo="<?= e($name) ?>">
         <div class="graph-head">
-          <h2><?= e($gname) ?></h2>
-          <div class="graph-controls">
-            <div class="repo-tabs">
-              <?php foreach ($rn as $i => $name): ?>
-                <button class="repo-tab on" data-repo="<?= e($name) ?>"><?= e($name) ?></button>
+          <h2><?= e($name) ?> <span class="graph-group"><?= e($p['group']) ?></span></h2>
+          <?php // A platform picker PER PANE, listing only the platforms this
+                // repo actually has samples for — a CoreMind pane offering to
+                // hide its watchOS line would be offering nothing. ?>
+          <details class="repo-pick">
+            <summary>Platforms <span class="caret">&#9662;</span></summary>
+            <div class="repo-pick-menu">
+              <?php foreach ($p['plats'] as $plat): ?>
+                <label>
+                  <input type="checkbox" checked data-plat="<?= e($plat) ?>">
+                  <span class="dot" data-plat-dot="<?= e($plat) ?>"></span><?= e($PLATFORMS[$plat]) ?>
+                </label>
               <?php endforeach; ?>
             </div>
-            <details class="repo-pick">
-              <summary>Platforms <span class="caret">&#9662;</span></summary>
-              <div class="repo-pick-menu">
-                <?php foreach ($PLATFORMS as $plat => $pname): ?>
-                  <label>
-                    <input type="checkbox" checked data-plat="<?= e($plat) ?>">
-                    <span class="dot" data-plat-dot="<?= e($plat) ?>"></span><?= e($pname) ?>
-                  </label>
-                <?php endforeach; ?>
-              </div>
-            </details>
-          </div>
+          </details>
         </div>
-        <svg class="statechart" viewBox="0 0 900 190" style="width:100%;height:230px"></svg>
+        <svg class="statechart" viewBox="0 0 900 210" style="width:100%;height:236px"></svg>
         <div class="graph-axis"><span class="ax-from"></span><span class="ax-mid"></span><span class="ax-to"></span></div>
       </div>
     <?php endforeach; ?>
@@ -809,14 +884,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
       function drawChart(card) {
         const svg = card.querySelector('svg.statechart');
         if (!svg || !SAMPLES.length) { return; }
-        // Repos TOGGLE now — "clicking on a repo should either include or
-        // exclude it from the history plot" — so several can be compared at
-        // once. Colour still means platform; the dots and tooltips name the
-        // repo, which is the only thing that could otherwise be ambiguous.
-        const repos = [...card.querySelectorAll('.repo-tab.on')].map(b => b.dataset.repo);
-        const plats = [...card.querySelectorAll('.repo-pick input:checked')].map(i => i.dataset.plat);
+        // ONE REPO, whichever this pane is for. Colour means platform and
+        // nothing else, so a line needs no legend lookup to read.
+        const repos = [card.dataset.repo];
+        const plats = [...card.querySelectorAll('.repo-pick input[data-plat]:checked')].map(i => i.dataset.plat);
 
-        const W = 900, H = 190, padL = 108, padR = 18, padT = 18, padB = 22;
+        const W = 900, H = 210, padL = 108, padR = 18, padT = 18, padB = 22;
         const t0 = SAMPLES[0].t, t1 = Math.max(SAMPLES[SAMPLES.length - 1].u, t0 + 60);
         const x = (t) => padL + ((t - t0) / (t1 - t0)) * (W - padL - padR);
         const y = (sev) => padT + (BAND_AT[sev] / (BANDS.length - 1)) * (H - padT - padB);
@@ -829,21 +902,31 @@ function cell_chip(?int $sev, string $repo, array $running): string
                  '" text-anchor="end" font-size="11" fill="' + b.color + '" opacity="0.85">' + b.label + '</text>';
         });
 
+        // A NUDGE PER PLATFORM, so lines that agree are still countable. Six
+        // platforms all Operational drew six paths on one pixel row and looked
+        // like a single line — the picture said "one thing is fine" when it
+        // meant "six things are". The offset is a fraction of the band gap, so
+        // a nudged line never reads as the band above or below it.
+        const gap = (H - padT - padB) / (BANDS.length - 1);
+        const spread = Math.min(gap * 0.34, 5.5);
+        const nudge = (i) => plats.length < 2 ? 0 : (i - (plats.length - 1) / 2) * (spread * 2 / (plats.length - 1));
+
         const changes = [];
-        repos.forEach((repo) => plats.forEach((plat) => {
+        repos.forEach((repo) => plats.forEach((plat, pi) => {
           const key = repo + '.' + plat;
           const st = PLAT_STYLE[plat] || { c: '#9c978d' };
+          const dy = nudge(pi);
           let d = '', prev = null, spanFrom = null;
           const mine = [];
           SAMPLES.forEach((smp) => {
             if (!(key in smp.s)) { return; }
             const sev = smp.s[key], xa = x(smp.t), xb = x(smp.u);
-            if (prev === null) { d += 'M ' + xa + ' ' + y(sev); mine.push({ t: smp.t, sev, first: true }); spanFrom = smp.t; }
+            if (prev === null) { d += 'M ' + xa + ' ' + (y(sev) + dy); mine.push({ t: smp.t, sev, first: true }); spanFrom = smp.t; }
             else {
-              d += ' L ' + xa + ' ' + y(prev) + ' L ' + xa + ' ' + y(sev);
+              d += ' L ' + xa + ' ' + (y(prev) + dy) + ' L ' + xa + ' ' + (y(sev) + dy);
               if (prev !== sev) { mine.push({ t: smp.t, sev }); spanFrom = smp.t; }
             }
-            d += ' L ' + xb + ' ' + y(sev);
+            d += ' L ' + xb + ' ' + (y(sev) + dy);
             prev = sev;
           });
           if (!d) { return; }
@@ -864,7 +947,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         Object.keys(spots).forEach((k) => {
           const list = spots[k], t = list[0].t, sev = list[0].sev;
           const cx = x(t), cy = y(sev), R = list.length > 1 ? 7 : 5;
-          const names = list.map(c => (repos.length > 1 ? c.repo + ' ' : '') + PLATFORMS[c.plat]);
+          const names = list.map(c => PLATFORMS[c.plat]);
           // TIMESTAMPS in the tooltip — when it entered this state, and when it
           // left, or that it is still there.
           const spanEnd = list.map(c => c.until).every(u => u === null)
@@ -900,19 +983,23 @@ function cell_chip(?int $sev, string $repo, array $running): string
         card.querySelector('.ax-from').textContent = fmtT(t0);
         card.querySelector('.ax-to').textContent = fmtT(t1);
         const n = Object.keys(spots).filter(k => !spots[k].some(c => c.first)).length;
-        card.querySelector('.ax-mid').textContent =
-          (repos.length ? '' : 'no repos selected · ') + (n === 0 ? 'no changes in this window' : n + (n === 1 ? ' change' : ' changes'));
+        card.querySelector('.ax-mid').textContent = plats.length === 0
+          ? 'no platforms selected'
+          : (n === 0 ? 'no changes' : n + (n === 1 ? ' change' : ' changes'));
       }
 
       function drawAll() { document.querySelectorAll('.graph-card[data-graph]').forEach(drawChart); }
-      document.querySelectorAll('.repo-tab').forEach(btn => btn.addEventListener('click', () => {
-        // A toggle, not a radio. Turning the last one off is allowed — the
-        // chart says "no repos selected" rather than silently keeping one on,
-        // which would make the button look broken.
-        btn.classList.toggle('on');
-        drawChart(btn.closest('.graph-card'));
-      }));
-      document.querySelectorAll('.repo-pick input[data-plat]').forEach(cb =>
+
+      // WHICH PANES ARE SHOWN. Unticking hides the card; ticking it back
+      // redraws, because a card hidden at load has never been drawn.
+      document.querySelectorAll('#pane-pick input[data-pane]').forEach(cb =>
+        cb.addEventListener('change', () => {
+          const card = document.querySelector('.graph-card[data-repo="' + cb.dataset.pane + '"]');
+          if (!card) { return; }
+          card.hidden = !cb.checked;
+          if (cb.checked) { drawChart(card); }
+        }));
+      document.querySelectorAll('.graph-card .repo-pick input[data-plat]').forEach(cb =>
         cb.addEventListener('change', () => drawChart(cb.closest('.graph-card'))));
       document.querySelectorAll('[data-plat-dot]').forEach(d => {
         const st = PLAT_STYLE[d.dataset.platDot]; if (st) { d.style.background = st.c; }
@@ -923,46 +1010,6 @@ function cell_chip(?int $sev, string $repo, array $running): string
   <?php endif; ?>
 
 
-  <?php if (empty($history)): ?>
-    <div class="graph-card">
-      <div class="graph-empty">
-        No dtp/tdtp runs recorded yet. The next <code>dtp</code> or
-        <code>tdtp</code> from CoreMind's <code>bin/dtp.sh</code> reports here,
-        and the last 5 show up as buttons below.
-      </div>
-    </div>
-  <?php else: ?>
-    <div class="run-buttons" data-live="runs">
-      <?php foreach ($history as $i => $run):
-        $sev = (int) ($run['severity'] ?? 3);
-        $isRun = ($run['status'] ?? '') === 'running';
-        $cls = $isRun ? 'running' : severity_chip_class($sev);
-      ?>
-        <button class="run-btn<?= $i === 0 ? ' selected' : '' ?>" data-run="<?= $i ?>">
-          <span class="t"><?= e(ctFull($run['started_at'] ?? '?')) ?></span>
-          <?php // The separator is OUTSIDE e(): escaping '&middot;' turns its own
-                // ampersand into &amp; and the button reads a literal "&middot;". ?>
-          <span class="k"><?= e($run['kind'] ?? 'dtp') ?> &middot; <?= e($run['target'] ?? '?') ?></span>
-          <?php // The end time lives on the card. There used to be a detail
-                // banner underneath repeating the card you had just clicked,
-                // which is a second copy of the thing you are looking at. ?>
-          <span class="k"><?= $isRun
-            ? 'running since ' . e(ct($run['started_at'] ?? '', 'g:i a'))
-            : (!empty($run['finished_at'])
-                ? 'ended ' . e(ct($run['finished_at'], 'g:i a'))
-                : 'no end recorded') ?></span>
-          <?php // "instead of just running, it should say the time the job was
-                // started" — a run in flight is identified by when it began,
-                // which is also how you tell a live one from a stuck one. ?>
-          <span class="chip <?= $cls ?>"><?= $isRun
-            ? 'started ' . e(ct($run['started_at'] ?? '', 'g:i a'))
-            : e($run['status'] ?? '?') ?></span>
-        </button>
-      <?php endforeach; ?>
-    </div>
-
-  <?php endif; ?>
-
   </div>
 
   <!-- ============================================================ LIVE STATUS -->
@@ -970,12 +1017,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   <?php $checkedAt = (int) ($results['checked_at'] ?? @filemtime($cachePath) ?: time());
         $loginsAt  = (int) ($results['logins_checked_at'] ?? 0); ?>
-  <p class="dek">
-    Checked <strong><?= e(ct($checkedAt)) ?></strong>
-    &middot; sign-ins <?= $loginsAt ? e(ctFull($loginsAt)) : 'not yet probed' ?>
-    &middot; swept every <?= $cacheTtl ?>s while this is open, every 30 min on a schedule.
-    <a class="recheck" href="?recheck=1#live">Check now</a>
-  </p>
+  <p class="dek">Checked <strong><?= e(ct($checkedAt)) ?></strong><?= $loginsAt
+    ? ' &middot; sign-ins ' . e(ctFull($loginsAt)) : '' ?><a class="recheck" href="?recheck=1#live">Check now</a></p>
 
   <?php // Hits, from lib/hitlog.php — every page on this host writes one line
         // per request into one log, so this counts the whole site rather than
@@ -999,53 +1042,76 @@ function cell_chip(?int $sev, string $repo, array $running): string
               // fact, and reading it as several unrelated rows is how it gets
               // mistaken for a coincidence. ?>
         <h3 class="domain-head"><?= e($domain) ?><?= $domain === 'seancheren.com' ? ' <span class="domain-note">production</span>' : ' <span class="domain-note">sandbox</span>' ?></h3>
-        <div class="endpoint-row endpoint-head" data-sortable>
-          <div data-col="0">Endpoint</div><div data-col="1">Status</div><div data-col="2">Sign-in</div>
-          <div data-col="3">Response</div><div data-col="4">Auth scope</div><div>How that auth works</div>
-        </div>
-        <div class="domain-rows">
-        <?php foreach ($list as $ep): $r = $results[$key][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
-          <div class="endpoint-row" data-live="ep:<?= e($ep['url']) ?>" title="checked <?= e(ct($checkedAt)) ?>">
-            <div data-sort="<?= e($ep['label']) ?>"><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
-            <?php // STATUS and AUTH are separate columns now — Sean, 2026-08-22:
-                  // "status should be separate from auth on live status". They
-                  // answer different questions and a row that ran them together
-                  // read as though the auth were the reason for the status. ?>
-            <?php // The URL answering, and nothing more. A 401 is UP: the server
-                  // replied. Whether anybody can get in is the next column's
-                  // question, and conflating the two was the old label's whole
-                  // problem. ?>
-            <div data-sort="<?= $r['ok'] ? 0 : 1 ?>"><span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'up' : 'down' ?></span></div>
-            <?php // The SCOPE's verdict, not this row's. A scope is proven once and
+        <?php
+        /**
+         * SIGN-IN REQUIRED vs PUBLIC, as two subsections — Sean, 2026-08-23:
+         * "credentialed vs non-credentialed sites should have different
+         * subsections in the live status page".
+         *
+         * They are not the same kind of row and were never comparable. A
+         * public page has no sign-in to test and no scope to name, so mixing
+         * them meant eight rows of "n/a" in two columns, plus a "Public — no
+         * login" repeated down a third. Split, the public table needs three
+         * columns and the credentialed one keeps the columns that say
+         * something.
+         */
+        $sections = [
+            ['Sign-in required', array_values(array_filter($list, fn($ep) => ($ep['scope_key'] ?? 'public') !== 'public')), true],
+            ['Public',           array_values(array_filter($list, fn($ep) => ($ep['scope_key'] ?? 'public') === 'public')), false],
+        ];
+        foreach ($sections as [$secName, $secList, $gated]):
+          if (!$secList) { continue; } ?>
+          <div class="sec<?= $gated ? '' : ' sec-open' ?>">
+            <div class="sec-head"><?= e($secName) ?></div>
+            <div class="endpoint-row endpoint-head" data-sortable>
+              <div data-col="0">Endpoint</div><div data-col="1">Status</div>
+              <?php if ($gated): ?><div data-col="2">Sign-in</div><?php endif; ?>
+              <div data-col="<?= $gated ? 3 : 2 ?>">Response</div>
+              <?php if ($gated): ?><div data-col="4">Scope</div><?php endif; ?>
+            </div>
+            <div class="domain-rows">
+            <?php foreach ($secList as $ep): $r = $results[$key][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
+              <div class="endpoint-row" data-live="ep:<?= e($ep['url']) ?>" title="checked <?= e(ct($checkedAt)) ?>">
+                <div data-sort="<?= e($ep['label']) ?>"><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
+                <?php // The URL answering, and nothing more. A 401 is UP: the
+                      // server replied. Whether anybody can get in is the next
+                      // column's question. ?>
+                <div data-sort="<?= $r['ok'] ? 0 : 1 ?>"><span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'up' : 'down' ?></span></div>
+                <?php if ($gated):
+                  // The SCOPE's verdict, not this row's. A scope is proven once and
                   // every row using it reports that result — which is the fact worth
-                  // seeing: ChefMind goes down exactly when CalMind's accounts do. ?>
-            <div data-sort="<?php
-              $sk = $ep['scope_key'] ?? 'public';
-              $lg = $results['scopes'][$sk] ?? null;
-              echo $sk === 'public' ? 0 : ($lg === null ? 2 : ['ok' => 1, 'failed' => 3, 'skipped' => 2][$lg['state']] ?? 2);
-            ?>"><?php
-              if ($sk === 'public')               { echo '<span class="scope-chip">n/a</span>'; }
-              elseif ($lg === null)               { echo '<span class="scope-chip">not probed</span>'; }
-              elseif ($lg['state'] === 'ok')      { echo '<span class="chip live" title="' . e($lg['why']) . '">sign-in works</span>'; }
-              elseif ($lg['state'] === 'failed')  { echo '<span class="chip crit" title="' . e($lg['why']) . '">sign-in BROKEN</span>'; }
-              else { echo '<span class="chip partial" title="' . e($lg['why']) . '">not probed</span>'; }
-            ?></div>
-            <div class="endpoint-ms" data-sort="<?= (int) ($r['ms'] ?? 0) ?>"><?= $r['status'] ? $r['status'] . ' &middot; ' . $r['ms'] . 'ms' : '&mdash;' ?></div>
-            <div data-sort="<?= e($ep['scope_key'] ?? 'public') ?>"><span class="scope-chip"><?= $ep['scope'] ?? 'unknown' ?></span></div>
-            <div class="endpoint-auth"><?= e($ep['auth']) ?></div>
+                  // seeing: ChefMind goes down exactly when CalMind's accounts do.
+                  $sk = $ep['scope_key'] ?? 'public';
+                  $lg = $results['scopes'][$sk] ?? null; ?>
+                  <div data-sort="<?= $lg === null ? 2 : (['ok' => 1, 'failed' => 3, 'skipped' => 2][$lg['state']] ?? 2) ?>"><?php
+                    if ($lg === null)                  { echo '<span class="scope-chip">not probed</span>'; }
+                    elseif ($lg['state'] === 'ok')     { echo '<span class="chip live" title="' . e($lg['why']) . '">works</span>'; }
+                    elseif ($lg['state'] === 'failed') { echo '<span class="chip crit" title="' . e($lg['why']) . '">BROKEN</span>'; }
+                    else { echo '<span class="chip partial" title="' . e($lg['why']) . '">not probed</span>'; }
+                  ?></div>
+                <?php endif; ?>
+                <div class="endpoint-ms" data-sort="<?= (int) ($r['ms'] ?? 0) ?>"><?= $r['status'] ? $r['status'] . ' &middot; ' . $r['ms'] . 'ms' : '&mdash;' ?></div>
+                <?php if ($gated): ?>
+                  <?php // The mechanism rides as a tooltip. It was its own prose
+                        // column, which duplicated the chip beside it on every
+                        // site row and only said anything new on the API ones. ?>
+                  <div data-sort="<?= e($ep['scope_key'] ?? 'public') ?>"><span class="scope-chip" title="<?= e(strip_tags($ep['auth'] ?? '')) ?>"><?= $ep['scope'] ?? 'unknown' ?></span></div>
+                <?php endif; ?>
+              </div>
+            <?php endforeach; ?>
+            </div>
           </div>
         <?php endforeach; ?>
-        </div>
       <?php endforeach; ?>
     </div>
   <?php endforeach; ?>
 
   <div class="legend">
-    <div class="legend-item"><span class="swatch live"></span> <strong>up</strong> — the URL answered. A 401 counts: the server replied.</div>
-    <div class="legend-item"><span class="swatch crit"></span> <strong>down</strong> — no answer, or an error</div>
-    <div class="legend-item"><span class="swatch live"></span> <strong>sign-in works</strong> — a probe account really signed in just now</div>
-    <div class="legend-item"><span class="swatch crit"></span> <strong>sign-in BROKEN</strong> — the URL is up and nobody can get in</div>
-    <div class="legend-item"><span class="swatch partial"></span> <strong>not probed</strong> — no probe credentials in <code>lib/config.php</code>; hover for which key is missing</div>
+    <div class="legend-item"><span class="swatch live"></span> <strong>up</strong> — answered; 401 counts</div>
+    <div class="legend-item"><span class="swatch crit"></span> <strong>down</strong> — no answer</div>
+    <div class="legend-item"><span class="swatch live"></span> <strong>works</strong> — a probe account signed in</div>
+    <div class="legend-item"><span class="swatch crit"></span> <strong>BROKEN</strong> — up, nobody can get in</div>
+    <div class="legend-item"><span class="swatch partial"></span> <strong>not probed</strong> — no credentials in <code>lib/config.php</code></div>
   </div>
 
   </div>

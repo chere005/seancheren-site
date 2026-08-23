@@ -39,9 +39,9 @@ $PLATFORMS = [
     'ios' => 'iOS', 'watchos' => 'watchOS', 'android' => 'Android',
 ];
 $REPO_GROUPS = [
-    'mindsuite' => ['Mind-Suite', 'The five repos and the apps they ship.'],
-    'developer'  => ['Developer', 'Tooling for how the work gets done, not things that ship to a device.'],
-    'website'    => ['Website', 'What is served from the seancheren.com account, suite or not.'],
+    'mindsuite' => ['Mind-Suite', 'Five repos and the apps they ship.'],
+    'developer' => ['Developer', 'Tooling. Nothing ships to a device.'],
+    'website'   => ['Website', 'Served from the seancheren.com account.'],
 ];
 
 /**
@@ -182,6 +182,55 @@ const SAMPLE_KEEP = 120;
  */
 const SEV_RUNNING = 4;
 
+/**
+ * NO SUCH TARGET, recorded rather than skipped — Sean, 2026-08-23: "there
+ * needs to be a n/a category in the y axis".
+ *
+ * A null cell used to be dropped from the sample entirely, which left the
+ * graph unable to tell "there is no Windows build of this" from "nothing has
+ * been recorded yet", and made a platform that GAINS a target look as though
+ * it had always had one. It is a band on the axis, at the bottom, outside the
+ * good-to-bad run: not a score, the absence of one.
+ */
+const SEV_NA = -1;
+
+/**
+ * The most recent run, and which repos it is touching.
+ *
+ * Both readers of this file need it and both used to carry their own copy —
+ * the page from history it had already loaded, the CLI from a hand-rolled
+ * block. They could disagree, and did: a sweep triggered by an open browser
+ * recorded a sample with NO running repos while the CLI's sweep a minute later
+ * recorded the same instant as purple. One implementation, so a release looks
+ * the same in the history whoever happened to ask.
+ */
+function status_latest_run(): ?array
+{
+    foreach (['/home/protected/status/history.json', __DIR__ . '/../data/status-history.json'] as $p) {
+        if (!is_file($p)) { continue; }
+        $raw = json_decode((string) @file_get_contents($p), true);
+        if (!is_array($raw) || !$raw) { continue; }
+        usort($raw, fn($a, $b) => strcmp((string) ($b['started_at'] ?? ''), (string) ($a['started_at'] ?? '')));
+        return $raw[0];
+    }
+    return null;
+}
+
+/**
+ * A run reports the resolved target ("core CalMind ChefMind"), so a release
+ * that is not touching MyCalMind does not claim to be. During `tdtp all` that
+ * is every repo, which is the case this was asked for.
+ */
+function status_running_repos(?array $latest): array
+{
+    if (!$latest || ($latest['status'] ?? '') !== 'running') { return []; }
+    $out = [];
+    foreach (preg_split('/\s+/', trim((string) ($latest['target'] ?? ''))) as $t) {
+        if ($t !== '') { $out[$t === 'core' ? 'CoreMind' : $t] = true; }
+    }
+    return $out;
+}
+
 function status_sample_row(array $repos, array $webProbe, array $endpoints, array $results, array $running = []): array
 {
     // Every probed URL's result, flattened, so a repo can ask about its own.
@@ -206,7 +255,9 @@ function status_sample_row(array $repos, array $webProbe, array $endpoints, arra
                     if (empty($byUrl[$u]['ok'])) { $sev = 3; break; }
                 }
             }
-            if ($sev === null) { continue; }
+            // n/a stays n/a through a release: a repo shipping right now does
+            // not acquire a watchOS app for the duration of its own dtp.
+            if ($sev === null) { $row['s'][$repo['name'] . '.' . $plat] = SEV_NA; continue; }
             // A release in flight overrides whatever the cell would otherwise
             // say: for that stretch the honest answer is "this is being
             // replaced right now", and the old value is not yet false.
@@ -443,22 +494,22 @@ $endpoints = [
     'mindsuite' => [
         'seancheren.com' => [
             ['label' => 'CalMind',    'app' => 'CalMind',  'url' => 'https://seancheren.com/CalMind/',
-             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Bearer token or passkey — not this site's login"],
+             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Bearer token or passkey"],
             ['label' => 'CalMind API', 'app' => 'CalMind', 'url' => 'https://seancheren.com/CalMind/api/index.php',
              'scope' => 'CalMind', 'scope_key' => 'calmind',
              'post' => '{"action":"spaces"}',
-             'auth' => "Bearer token, except <code>spaces</code> — which answers without auth, and is what makes it safe to probe"],
+             'auth' => "Bearer token; the <code>spaces</code> action answers without one"],
             ['label' => 'ChefMind',   'app' => 'ChefMind', 'url' => 'https://seancheren.com/ChefMind/',
-             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Signs in through CalMind's API — same users and tokens"],
+             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Same users and tokens as CalMind"],
             ['label' => 'AcctMind',   'app' => 'AcctMind', 'url' => 'https://seancheren.com/AcctMind/',
              'scope' => 'site login', 'scope_key' => 'site',
-             'auth' => "The suite's sign-in, reused — 401 carries the form rather than redirecting, so you land where you meant to"],
+             'auth' => "Site login, reused"],
         ],
         'test.seancheren.com' => [
             ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://test.seancheren.com/CalMind/',
-             'scope' => 'CalMind &middot; test store', 'scope_key' => 'calmind', 'auth' => "CalMind accounts, test store"],
+             'scope' => 'CalMind', 'scope_key' => 'calmind', 'auth' => "Bearer token"],
             ['label' => 'AcctMind', 'app' => 'AcctMind', 'url' => 'https://test.seancheren.com/AcctMind/',
-             'scope' => 'sandbox login', 'scope_key' => 'site', 'auth' => "Sandbox sign-in — its own account store"],
+             'scope' => 'site login', 'scope_key' => 'site', 'auth' => "Its own account store"],
         ],
     ],
     'site' => [
@@ -467,17 +518,17 @@ $endpoints = [
             ['label' => 'About',           'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/about/',        'auth' => 'Public — no login'],
             ['label' => 'Contact',         'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/contact/',      'auth' => 'Public — no login'],
             ['label' => 'Projects',        'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/projects/',     'auth' => 'Public — no login'],
-            ['label' => 'Theme picker',    'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public — sets a cookie'],
-            ['label' => 'Chat',            'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public — deliberately no login'],
+            ['label' => 'Theme picker',    'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public'],
+            ['label' => 'Chat',            'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public'],
             ["label" => "Aki's Bookshelf", 'app' => 'site', 'scope' => 'site login &middot; aki only', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisbookshelf/',
              'auth' => "Site login, then aki only"],
-            ['label' => 'Themes bench',    'app' => 'site', 'scope' => 'site login', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Site login — no per-account gate'],
+            ['label' => 'Themes bench',    'app' => 'site', 'scope' => 'site login', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Any signed-in account'],
             ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/', 'scope' => 'site login &middot; sean only', 'scope_key' => 'site',       'auth' => "Site login, then sean only"],
             ['label' => "Aki's Tarot",     'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/akitarot/',     'auth' => 'Public — no login'],
         ],
         'test.seancheren.com' => [
-            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope' => 'public', 'scope_key' => 'public',       'auth' => 'Public — sandbox, its own data dir'],
-            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope' => 'sandbox login &middot; sean only', 'scope_key' => 'site', 'auth' => "Sandbox login, then sean only"],
+            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope' => 'public', 'scope_key' => 'public',       'auth' => 'Public'],
+            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope' => 'site login &middot; sean only', 'scope_key' => 'site', 'auth' => "Its own account store, then sean only"],
         ],
     ],
 ];
@@ -486,15 +537,28 @@ $cachePath = is_dir('/home/protected/status')
     ? '/home/protected/status/reachability-cache.json'
     : sys_get_temp_dir() . '/sc-status-reachability.json';
 $cacheTtl = 45;
+/** Six hours between real sign-in attempts — see the probe block below. */
+const LOGIN_TTL = 6 * 3600;
 $results = null;
 // ?recheck=1 throws the cache away and sweeps now — Sean, 2026-08-23: "run a
 // check now across all of status". Without it the only way to force a sweep
 // was to wait out the TTL.
-$forceCheck = isset($_GET['recheck']);
+/**
+ * TWO FORCES, not one. "Check now" on the page means both: sweep the URLs and
+ * try the sign-ins. The scheduled CLI means only the first on its 30-minute
+ * clock, and both on its 6-hour one — which is the whole point of running it
+ * twice at different cadences.
+ */
+$forceCheck  = isset($_GET['recheck']) || !empty($GLOBALS['STATUS_FORCE_SWEEP']);
+$forceLogins = isset($_GET['recheck']) || !empty($GLOBALS['STATUS_FORCE_LOGINS']);
+// The last sweep, whatever its age — the reachability half is thrown away on a
+// re-sweep, but the sign-in half is carried forward off it.
+$prev = is_file($cachePath) ? json_decode((string) file_get_contents($cachePath), true) : null;
+if (!is_array($prev)) { $prev = []; }
 if (!$forceCheck && is_file($cachePath) && (time() - filemtime($cachePath)) < $cacheTtl) {
-    $results = json_decode((string) file_get_contents($cachePath), true);
+    $results = $prev ?: null;
 }
-if (!is_array($results)) {
+if (!is_array($results) || !$results) {
     $results = [];
     foreach ($endpoints as $group => $domains) {
         foreach ($domains as $list) {
@@ -504,12 +568,31 @@ if (!is_array($results)) {
             }
         }
     }
-    // Each SCOPE's sign-in, once — not once per row that uses it, and not
-    // once per page view either: it is cached with the reachability sweep, so
-    // a probe account signs in every TTL rather than every visit.
+    /**
+     * SIGN-INS ARE ON A SLOW CLOCK — Sean, 2026-08-23: "check status uptime
+     * every 30 mins on status and signing in every 6 hours".
+     *
+     * They used to ride the reachability sweep, which meant a probe account
+     * really authenticated every 45 seconds for as long as the page sat open.
+     * A login attempt lands in logs and counts against rate limits; done twice
+     * a minute it stops meaning anything and starts being the noise. So the
+     * previous verdict is carried forward until it is SIX HOURS old.
+     *
+     * "Check now" still forces one, because that is what the button is for.
+     */
+    $lastLogins = (int) ($prev['logins_checked_at'] ?? 0);
+    $dueLogins  = $forceLogins || (time() - $lastLogins) >= LOGIN_TTL;
+    $probed     = false;
     foreach (auth_scopes() as $key => $sc) {
-        $results['scopes'][$key] = $sc['probe'] === null ? null : check_login($sc['probe']);
+        if ($sc['probe'] === null) { $results['scopes'][$key] = null; continue; }
+        if ($dueLogins) { $results['scopes'][$key] = check_login($sc['probe']); $probed = true; }
+        else            { $results['scopes'][$key] = $prev['scopes'][$key] ?? null; }
     }
+    // Stamped only when a probe ACTUALLY RAN. Stamping a forced sweep that had
+    // no credentials to try would put a time against "not probed", which reads
+    // as a probe that came back empty rather than one that never happened.
+    if ($probed)          { $results['logins_checked_at'] = time(); }
+    elseif ($lastLogins)  { $results['logins_checked_at'] = $lastLogins; }
     // Stamped, so every row can say WHEN it was last actually asked rather
     // than implying it is true right now.
     $results['checked_at'] = time();
@@ -519,5 +602,6 @@ if (!is_array($results)) {
     // what the History graph draws a line per app from. Recorded only on a
     // real sweep, never on a cache hit, so the samples are spaced by the cache
     // TTL rather than by how often somebody opened the page.
-    status_sample_record(status_sample_row($repos, $WEB_PROBE, $endpoints, $results));
+    status_sample_record(status_sample_row($repos, $WEB_PROBE, $endpoints, $results,
+                                           status_running_repos(status_latest_run())));
 }

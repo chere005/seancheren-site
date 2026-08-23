@@ -1,9 +1,12 @@
 <?php
-// A page served under /test/ (the sandbox mirror) loads lib-test/ instead of lib/, and one
-// served under /dev/ (a second, fixed sandbox slot) loads lib-dev/ — each mirror
-// isolated in code, config and data. Links stay root-relative — the sandboxes are
-// subdomains and .htaccess maps test.seancheren.com/X to /test/X — so nothing here
+// A page served under /test/ (the sandbox mirror) loads lib-test/ instead of lib/,
+// isolated in code, config and data. Links stay root-relative — the sandbox is a
+// subdomain and .htaccess maps test.seancheren.com/X to /test/X — so nothing here
 // prefixes a href. Keep this preamble identical when adding a page.
+//
+// There was a /dev/ slot too, a second fixed sandbox. Sean, 2026-08-23: it
+// "shouldn't even exist anymore". It held no data — data-dev was never created —
+// so it went whole, code and all.
 // THREE signals, and all three are needed. __DIR__ with a bare strpos for '/test/'
 // missed the instance's OWN top-level page — /home/public/test/index.php sits in
 // /home/public/test, with no trailing slash — so the sandbox home silently loaded
@@ -14,15 +17,10 @@ $__host   = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
 $__test   = preg_match('#/test(/|$)#', __DIR__) === 1
          || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0
          || strncmp($__host, 'test.', 5) === 0;
-$__dev    = preg_match('#/dev(/|$)#', __DIR__) === 1
-         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/dev/', 5) === 0
-         || strncmp($__host, 'dev.', 4) === 0;
 $__libDir = null;
-$__cands  = $__dev
-    ? [__DIR__ . '/../../../lib-dev', '/home/protected/lib-dev']
-    : ($__test
-        ? [__DIR__ . '/../../../lib-test', '/home/protected/lib-test']
-        : [__DIR__ . '/../../lib',         '/home/protected/lib']);
+$__cands  = $__test
+    ? [__DIR__ . '/../../../lib-test', '/home/protected/lib-test']
+    : [__DIR__ . '/../../lib',      '/home/protected/lib'];
 foreach ($__cands as $__c) {
     if (is_file($__c . '/auth.php')) { $__libDir = $__c; break; }
 }
@@ -380,6 +378,35 @@ function probe_http(string $url, string $method, array $headers, ?string $body):
 }
 
 /**
+ * THE SCOPES, and the one probe that proves each.
+ *
+ * Sean, 2026-08-23: "why is CalMind sign-in status n/a? it has an auth scope".
+ * Right — the probe was attached to whichever ROW happened to carry it, so
+ * CalMind's page said n/a while CalMind's API, behind the same accounts, said
+ * it worked. A scope is the unit: it is proven once, and every row that uses
+ * it reports that verdict. That is also the honest reading of "which auth
+ * scope is used" — rows sharing a scope share its fate, which is exactly the
+ * fact worth seeing (ChefMind goes down when CalMind's accounts do).
+ */
+function auth_scopes(): array
+{
+    return [
+        'calmind' => ['label' => 'CalMind accounts',
+                      'probe' => ['kind' => 'calmind-api', 'cred' => 'calmind',
+                                  'url' => 'https://seancheren.com/CalMind/api/index.php']],
+        'acctmind' => ['label' => 'AcctMind accounts',
+                       'probe' => ['kind' => 'http-basic', 'cred' => 'acctmind',
+                                   'url' => 'https://seancheren.com/AcctMind/']],
+        'site' => ['label' => 'site login',
+                   'probe' => ['kind' => 'site-form', 'cred' => 'site',
+                               'url' => 'https://seancheren.com/akisthemes/']],
+        // Not a scope with a sign-in to prove. Saying "none needed" is a real
+        // answer; saying n/a is a shrug.
+        'public' => ['label' => 'public', 'probe' => null],
+    ];
+}
+
+/**
  * @return array{state:'ok'|'failed'|'skipped', why:string}
  */
 function check_login(array $login): array
@@ -420,51 +447,41 @@ $endpoints = [
     'mindsuite' => [
         'seancheren.com' => [
             ['label' => 'CalMind',    'app' => 'CalMind',  'url' => 'https://seancheren.com/CalMind/',
-             'scope' => 'CalMind accounts', 'auth' => "CalMind's own accounts — bearer token or passkey, never this site's login"],
+             'scope' => 'CalMind accounts', 'scope_key' => 'calmind', 'auth' => "CalMind's own accounts — bearer token or passkey, never this site's login"],
             ['label' => 'CalMind API', 'app' => 'CalMind', 'url' => 'https://seancheren.com/CalMind/api/index.php',
-             'scope' => 'CalMind accounts',
+             'scope' => 'CalMind accounts', 'scope_key' => 'calmind',
              'post' => '{"action":"spaces"}',
-             'login' => ['kind' => 'calmind-api', 'cred' => 'calmind', 'url' => 'https://seancheren.com/CalMind/api/index.php'],
              'auth' => "CalMind's own bearer token on every action except this one — `spaces` answers without auth, which is what makes it safe to probe from here"],
             ['label' => 'ChefMind',   'app' => 'ChefMind', 'url' => 'https://seancheren.com/ChefMind/',
-             'scope' => 'CalMind accounts (borrowed)', 'auth' => "Delegated — no backend of its own; signs in through CalMind's API, same users and tokens, in the dedicated \"chef\" sync space"],
+             'scope' => 'CalMind accounts (borrowed)', 'scope_key' => 'calmind', 'auth' => "Delegated — no backend of its own; signs in through CalMind's API, same users and tokens, in the dedicated \"chef\" sync space"],
             ['label' => 'AcctMind',   'app' => 'AcctMind', 'url' => 'https://seancheren.com/AcctMind/',
-             'scope' => 'AcctMind accounts &middot; HTTP Basic',
-             'login' => ['kind' => 'http-basic', 'cred' => 'acctmind', 'url' => 'https://seancheren.com/AcctMind/'],
+             'scope' => 'AcctMind accounts &middot; HTTP Basic', 'scope_key' => 'acctmind',
              'auth' => "AcctMind's own, separate account system, behind HTTP Basic"],
         ],
         'test.seancheren.com' => [
             ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://test.seancheren.com/CalMind/',
-             'scope' => 'CalMind accounts (test store)', 'auth' => "CalMind's own accounts, test instance — its own data, its own store"],
+             'scope' => 'CalMind accounts (test store)', 'scope_key' => 'calmind', 'auth' => "CalMind's own accounts, test instance — its own data, its own store"],
             ['label' => 'AcctMind', 'app' => 'AcctMind', 'url' => 'https://test.seancheren.com/AcctMind/',
-             'scope' => 'AcctMind accounts &middot; HTTP Basic', 'auth' => "AcctMind's own accounts, test instance, behind HTTP Basic"],
-        ],
-        'dev.seancheren.com' => [
-            ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://dev.seancheren.com/CalMind/',
-             'scope' => 'CalMind accounts (dev store)', 'auth' => "CalMind's own accounts, dev instance"],
+             'scope' => 'AcctMind accounts &middot; HTTP Basic', 'scope_key' => 'acctmind', 'auth' => "AcctMind's own accounts, test instance, behind HTTP Basic"],
         ],
     ],
     'site' => [
         'seancheren.com' => [
-            ['label' => 'Home',            'app' => 'site', 'url' => 'https://seancheren.com/', 'scope' => 'public',              'auth' => 'Public — no login'],
-            ['label' => 'About',           'app' => 'site', 'scope' => 'public', 'url' => 'https://seancheren.com/about/',        'auth' => 'Public — no login'],
-            ['label' => 'Contact',         'app' => 'site', 'scope' => 'public', 'url' => 'https://seancheren.com/contact/',      'auth' => 'Public — no login'],
-            ['label' => 'Projects',        'app' => 'site', 'scope' => 'public', 'url' => 'https://seancheren.com/projects/',     'auth' => 'Public — no login'],
-            ['label' => 'Theme picker',    'app' => 'site', 'scope' => 'public &middot; sets a cookie', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public — sets a cookie, no login'],
-            ['label' => 'Chat',            'app' => 'site', 'scope' => 'public &middot; deliberately none', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public — deliberately no login (see chat/index.php)'],
-            ["label" => "Aki's Bookshelf", 'app' => 'site', 'scope' => 'site login &rarr; aki only', 'url' => 'https://seancheren.com/akisbookshelf/',
-             'login' => ['kind' => 'site-form', 'cred' => 'site', 'url' => 'https://seancheren.com/akisbookshelf/'],
+            ['label' => 'Home',            'app' => 'site', 'url' => 'https://seancheren.com/', 'scope' => 'public', 'scope_key' => 'public',              'auth' => 'Public — no login'],
+            ['label' => 'About',           'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/about/',        'auth' => 'Public — no login'],
+            ['label' => 'Contact',         'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/contact/',      'auth' => 'Public — no login'],
+            ['label' => 'Projects',        'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/projects/',     'auth' => 'Public — no login'],
+            ['label' => 'Theme picker',    'app' => 'site', 'scope' => 'public &middot; sets a cookie', 'scope_key' => 'public', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public — sets a cookie, no login'],
+            ['label' => 'Chat',            'app' => 'site', 'scope' => 'public &middot; deliberately none', 'scope_key' => 'public', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public — deliberately no login (see chat/index.php)'],
+            ["label" => "Aki's Bookshelf", 'app' => 'site', 'scope' => 'site login &rarr; aki only', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisbookshelf/',
              'auth' => "Site login (lib/auth.php), then gated to the 'aki' account only"],
-            ['label' => 'Themes bench',    'app' => 'site', 'scope' => 'site login', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Site login (lib/auth.php); no per-account gate'],
-            ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/', 'scope' => 'site login &rarr; sean only',       'auth' => "Site login (lib/auth.php), then gated to the 'sean' account only"],
-            ['label' => "Aki's Tarot",     'app' => 'site', 'scope' => 'public', 'url' => 'https://seancheren.com/akitarot/',     'auth' => 'Public — no login. Deployed from the private aki-tarot repo, not from seancheren-site'],
+            ['label' => 'Themes bench',    'app' => 'site', 'scope' => 'site login', 'scope_key' => 'site', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Site login (lib/auth.php); no per-account gate'],
+            ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/', 'scope' => 'site login &rarr; sean only', 'scope_key' => 'site',       'auth' => "Site login (lib/auth.php), then gated to the 'sean' account only"],
+            ['label' => "Aki's Tarot",     'app' => 'site', 'scope' => 'public', 'scope_key' => 'public', 'url' => 'https://seancheren.com/akitarot/',     'auth' => 'Public — no login. Deployed from the private aki-tarot repo, not from seancheren-site'],
         ],
         'test.seancheren.com' => [
-            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope' => 'public &middot; sandbox',       'auth' => 'Public — the sandbox mirror, its own data dir'],
-            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope' => 'sandbox login &rarr; sean only', 'auth' => "Sandbox login (lib-test), then the 'sean' gate"],
-        ],
-        'dev.seancheren.com' => [
-            ['label' => 'Home', 'app' => 'site', 'url' => 'https://dev.seancheren.com/', 'scope' => 'public &middot; sandbox', 'auth' => 'Public — the second sandbox slot'],
+            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope' => 'public &middot; sandbox', 'scope_key' => 'public',       'auth' => 'Public — the sandbox mirror, its own data dir'],
+            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope' => 'sandbox login &rarr; sean only', 'scope_key' => 'site', 'auth' => "Sandbox login (lib-test), then the 'sean' gate"],
         ],
     ],
 ];
@@ -483,13 +500,15 @@ if (!is_array($results)) {
         foreach ($domains as $list) {
             foreach ($list as $ep) {
                 $r = check_url($ep['url'], $ep['post'] ?? null);
-                // The sign-in itself, where one is declared. Cached with the
-                // rest, so a probe account signs in once per TTL and not once
-                // per page view.
-                if (!empty($ep['login'])) { $r['login'] = check_login($ep['login']); }
                 $results[$group][$ep['url']] = $r;
             }
         }
+    }
+    // Each SCOPE's sign-in, once — not once per row that uses it, and not
+    // once per page view either: it is cached with the reachability sweep, so
+    // a probe account signs in every TTL rather than every visit.
+    foreach (auth_scopes() as $key => $sc) {
+        $results['scopes'][$key] = $sc['probe'] === null ? null : check_login($sc['probe']);
     }
     @mkdir(dirname($cachePath), 0700, true);
     @file_put_contents($cachePath, json_encode($results));
@@ -868,6 +887,10 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
     text-transform: uppercase; color: var(--ink-faint); padding-top: 8px; padding-bottom: 8px;
     background: var(--surface-alt);
   }
+  .endpoint-head [data-col]:hover { color: var(--ink); }
+  .endpoint-head [data-col].sorted { color: var(--accent); }
+  .endpoint-head [data-col]::after { content: " \2195"; opacity: 0.35; }
+
   .scope-chip {
     display: inline-block; font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.35;
     color: var(--ink-soft); background: var(--surface-alt);
@@ -1265,12 +1288,14 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
               // fact, and reading it as several unrelated rows is how it gets
               // mistaken for a coincidence. ?>
         <h3 class="domain-head"><?= e($domain) ?><?= $domain === 'seancheren.com' ? ' <span class="domain-note">production</span>' : ' <span class="domain-note">sandbox</span>' ?></h3>
-        <div class="endpoint-row endpoint-head">
-          <div>Endpoint</div><div>Status</div><div>Sign-in</div><div>Response</div><div>Auth scope</div><div>How that auth works</div>
+        <div class="endpoint-row endpoint-head" data-sortable>
+          <div data-col="0">Endpoint</div><div data-col="1">Status</div><div data-col="2">Sign-in</div>
+          <div data-col="3">Response</div><div data-col="4">Auth scope</div><div>How that auth works</div>
         </div>
+        <div class="domain-rows">
         <?php foreach ($list as $ep): $r = $results[$key][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
           <div class="endpoint-row">
-            <div><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
+            <div data-sort="<?= e($ep['label']) ?>"><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
             <?php // STATUS and AUTH are separate columns now — Sean, 2026-08-22:
                   // "status should be separate from auth on live status". They
                   // answer different questions and a row that ran them together
@@ -1279,19 +1304,27 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
                   // replied. Whether anybody can get in is the next column's
                   // question, and conflating the two was the old label's whole
                   // problem. ?>
-            <div><span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'up' : 'down' ?></span></div>
-            <div><?php
-              $lg = $r['login'] ?? null;
-              if ($lg === null) { echo '<span class="scope-chip">n/a</span>'; }
+            <div data-sort="<?= $r['ok'] ? 0 : 1 ?>"><span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'up' : 'down' ?></span></div>
+            <?php // The SCOPE's verdict, not this row's. A scope is proven once and
+                  // every row using it reports that result — which is the fact worth
+                  // seeing: ChefMind goes down exactly when CalMind's accounts do. ?>
+            <div data-sort="<?php
+              $sk = $ep['scope_key'] ?? 'public';
+              $lg = $results['scopes'][$sk] ?? null;
+              echo $sk === 'public' ? 0 : ($lg === null ? 2 : ['ok' => 1, 'failed' => 3, 'skipped' => 2][$lg['state']] ?? 2);
+            ?>"><?php
+              if ($sk === 'public')               { echo '<span class="scope-chip">none needed</span>'; }
+              elseif ($lg === null)               { echo '<span class="scope-chip">not probed</span>'; }
               elseif ($lg['state'] === 'ok')      { echo '<span class="chip live" title="' . e($lg['why']) . '">sign-in works</span>'; }
               elseif ($lg['state'] === 'failed')  { echo '<span class="chip crit" title="' . e($lg['why']) . '">sign-in BROKEN</span>'; }
               else { echo '<span class="chip partial" title="' . e($lg['why']) . '">not probed</span>'; }
             ?></div>
-            <div class="endpoint-ms"><?= $r['status'] ? $r['status'] . ' &middot; ' . $r['ms'] . 'ms' : '&mdash;' ?></div>
-            <div><span class="scope-chip"><?= $ep['scope'] ?? 'unknown' ?></span></div>
+            <div class="endpoint-ms" data-sort="<?= (int) ($r['ms'] ?? 0) ?>"><?= $r['status'] ? $r['status'] . ' &middot; ' . $r['ms'] . 'ms' : '&mdash;' ?></div>
+            <div data-sort="<?= e($ep['scope_key'] ?? 'public') ?>"><span class="scope-chip"><?= $ep['scope'] ?? 'unknown' ?></span></div>
             <div class="endpoint-auth"><?= e($ep['auth']) ?></div>
           </div>
         <?php endforeach; ?>
+        </div>
       <?php endforeach; ?>
     </div>
   <?php endforeach; ?>
@@ -1309,14 +1342,54 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
 </div>
 
 <script>
+  // THE TAB SURVIVES THE REFRESH. Sean, 2026-08-23: "keeps returning me to
+  // current automatically". The page reloads itself every 60s and the reload
+  // reset the tab, so reading History or Live Status for more than a minute
+  // was impossible. The hash carries it — which also makes a tab linkable,
+  // and means the restore happens before first paint rather than as a visible
+  // flick from Current to wherever you were.
+  function showTab(name) {
+    const panel = document.getElementById('tab-' + name);
+    if (!panel) { return false; }
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    panel.classList.add('active');
+    return true;
+  }
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      showTab(btn.dataset.tab);
+      history.replaceState(null, '', '#' + btn.dataset.tab);
     });
   });
+  showTab((location.hash || '').replace('#', '')) || showTab('current');
+
+  // CLICK A COLUMN TO SORT IT, within its own subsection — Sean, 2026-08-23.
+  // Scoped to the domain block rather than the whole group: sorting across
+  // domains would undo the grouping the section exists to show.
+  document.querySelectorAll('.endpoint-head[data-sortable] > [data-col]').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const head = th.closest('.endpoint-head');
+      const body = head.nextElementSibling;
+      if (!body || !body.classList.contains('domain-rows')) { return; }
+      const col = +th.dataset.col;
+      const dir = head.dataset.dir === String(col) ? -1 : 1;
+      head.dataset.dir = dir === 1 ? String(col) : '';
+      const key = (row) => {
+        const cell = row.children[col];
+        const v = cell ? (cell.dataset.sort ?? cell.textContent.trim()) : '';
+        const n = Number(v);
+        return Number.isFinite(n) && v !== '' ? n : String(v).toLowerCase();
+      };
+      [...body.children]
+        .sort((a, b) => { const x = key(a), y = key(b); return (x > y ? 1 : x < y ? -1 : 0) * dir; })
+        .forEach(r => body.appendChild(r));
+      head.querySelectorAll('[data-col]').forEach(h => h.classList.remove('sorted'));
+      th.classList.add('sorted');
+    });
+  });
+
   setTimeout(() => location.reload(), 60000);
 </script>
 

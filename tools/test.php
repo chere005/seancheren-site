@@ -223,35 +223,7 @@ t('a sandbox config does not inherit production, so its accounts are its own', f
     has('sandboxpw', $s, 'with the password its own config set');
 });
 
-// /dev/ has its own deploy script, separate from deploy.sh on purpose: someone working
-// on test/production and someone working on the sandbox must not be able to collide.
-t('deploy-dev.sh can only ever write the dev instance', function () use ($root) {
-    $sh = file_get_contents($root . '/deploy-dev.sh');
-    // The destinations are constants, not built from an argument — there is no mode that
-    // could aim this at production, and a guard refuses anything that isn't a /dev path.
-    has('PUB=/home/public/dev', $sh, 'the public destination is a constant');
-    has('LIB=/home/protected/lib-dev', $sh, 'so is the lib destination');
-    has('Refusing: that is production', $sh, 'and production is refused outright');
-    foreach (['/home/public/test', '/home/protected/lib-test'] as $t) {
-        eq(0, preg_match('/^[^#]*' . preg_quote($t, '/') . '/m', $sh),
-            "no runnable line names $t — test belongs to deploy.sh");
-    }
-    has("--exclude='config.php'", $sh, 'it never sends a config.php');
-    // Comments are allowed to say "--delete"; a runnable line is not allowed to use it.
-    eq(0, preg_match('/^[^#]*--delete/m', $sh), 'no runnable line passes --delete');
-    has('worktree add', $sh, 'it ships a clean checkout, not the shared working tree');
-    has("'users'        => ['dev' => '\$pw']", $sh, 'the config it writes is standalone');
-    has('random_bytes', $sh, 'with a generated bootstrap password');
-    has('still INHERITS', $sh, 'and an older inheriting config is reported, not rewritten');
-});
 
-t('deploy.sh is left to test and production, and knows nothing about dev', function () use ($root) {
-    $sh = file_get_contents($root . '/deploy.sh');
-    has('test|prod|both|promote)', $sh, 'its modes are test/prod/both/promote');
-    foreach (['/home/public/dev', 'lib-dev', 'data-dev'] as $d) {
-        hasnt($d, $sh, "deploy.sh never names $d");
-    }
-});
 
 t('an instance marker matches a directory that ENDS in the slug, not only one inside it',
   function () use ($root) {
@@ -264,7 +236,6 @@ t('an instance marker matches a directory that ENDS in the slug, not only one in
     $m = fn(string $dir, string $slug) => preg_match('#/' . $slug . '(/|$)#', $dir) === 1;
     ok($m('/home/public/test', 'test'), "the sandbox's own directory matches");
     ok($m('/home/public/test/about', 'test'), 'and so does a page inside it');
-    ok($m('/home/public/dev', 'dev'), 'the same for dev');
     ok(!$m('/home/public', 'test'), 'production does not');
     ok(!$m('/home/public/akisthemes', 'test'), 'nor does an unrelated page');
 
@@ -277,7 +248,7 @@ t('an instance marker matches a directory that ENDS in the slug, not only one in
         $rel = substr($f, strlen($root) + 1);
         has("preg_match('#/test(/|$)#', __DIR__)", $b, "$rel matches the slug at the end");
         has("strncmp(\$__host, 'test.', 5) === 0", $b, "$rel knows the test subdomain");
-        has("strncmp(\$__host, 'dev.', 4) === 0", $b, "$rel knows the dev subdomain");
+
     }
 });
 
@@ -1308,7 +1279,7 @@ t('picking a theme sets the sitetheme cookie and re-dresses the public pages', f
     $ck = implode("\n", array_filter($r['headers'], fn($h) => stripos($h, 'Set-Cookie:') === 0));
     has('path=/', strtolower($ck), 'the cookie names its path');
     $src = file_get_contents(dirname(__DIR__) . '/public/themepicker/index.php');
-    has("['/test/', '/dev/']", $src, 'the cookie path is scoped per instance');
+    has("['/test/']", $src, 'the cookie path is scoped per instance');
     foreach (['/', '/themepicker/'] as $p) {
         $b = req('GET', $p, [], $jar)['body'];
         has('#fefae0', strtolower($b), "$p wears sage");
@@ -1449,7 +1420,7 @@ t('an empty array expansion never trips set -u', function () use ($root) {
     // scripts' `set -u` kills the run mid-deploy. The exclude array is only non-empty on
     // a test push, so a bare expansion breaks `prod`/`both` while every test deploy — and
     // every --dry-run of one — sails through, which is exactly how it went unnoticed.
-    foreach (['deploy.sh', 'deploy-dev.sh'] as $f) {
+    foreach (['deploy.sh'] as $f) {
         $s = (string) file_get_contents($root . '/' . $f);
         $code = implode("\n", array_map(
             fn($l) => (string) preg_replace('/#.*$/', '', $l), preg_split('/\R/', $s)));
@@ -1512,35 +1483,9 @@ t('EVERY instance leaves calmind/ to the new app, prod included', function () us
         'and no longer keyed to the test destination alone');
     has('--exclude=/calmind /home/public/test/ /home/public/', $s,
         'promote excludes it from the server-side copy');
-    $d = (string) file_get_contents($root . '/deploy-dev.sh');
-    has("--exclude='/calmind'", $d, 'and dev skips it too');
 });
 
-t('deploy-dev.sh parses and keeps the same safety rules', function () use ($root) {
-    exec('bash -n ' . escapeshellarg($root . '/deploy-dev.sh') . ' 2>&1', $o, $rc);
-    eq(0, $rc, 'bash -n: ' . implode("\n", $o));
-    $s = (string) file_get_contents($root . '/deploy-dev.sh');
-    foreach (preg_split('/\R/', $s) as $n => $line) {
-        $bare = preg_replace('/#.*$/', '', $line);
-        if (strpos($bare, 'rsync') !== false) {
-            ok(strpos($bare, '--delete') === false, 'line ' . ($n + 1) . ' uses --delete');
-        }
-        if (strpos($bare, 'rsync') !== false || preg_match('/\brm\s/', $bare)) {
-            ok(strpos($bare, '/home/protected/data') === false,
-               'line ' . ($n + 1) . ' names a live data directory');
-        }
-    }
-    ok(substr_count($s, "--exclude='config.php'") >= 1, 'the lib rsync excludes config.php');
-});
 
-t('deploy-dev.sh can only aim at /dev', function () use ($root) {
-    // The script's whole reason to exist is that it cannot reach production or /test/:
-    // the destinations are constants, and refusal guards back them up.
-    $s = (string) file_get_contents($root . '/deploy-dev.sh');
-    has('PUB=/home/public/dev', $s, 'the public destination is a constant');
-    has('LIB=/home/protected/lib-dev', $s, 'so is the lib destination');
-    ok(substr_count($s, 'Refusing:') >= 3, 'the refusal guards are still standing');
-});
 
 t('nothing is left pointing into the deleted calmind/ area', function () use ($root) {
     // The old plain-PHP CalMind suite lived in a top-level calmind/ area, stitched into
@@ -1552,7 +1497,7 @@ t('nothing is left pointing into the deleted calmind/ area', function () use ($r
     foreach (['tabbar', 'folders', 'sharing', 'palette', 'util'] as $f) {
         ok(!file_exists($root . '/lib/' . $f . '.php'), "lib/$f.php belonged to the suite and is gone");
     }
-    foreach (['deploy.sh', 'deploy-dev.sh'] as $sh) {
+    foreach (['deploy.sh'] as $sh) {
         $b = (string) file_get_contents($root . '/' . $sh);
         hasnt('$SRC/calmind', $b, "$sh no longer lints a calmind/ area");
         has("--exclude='/calmind'", $b, "$sh still refuses to send anything at that path");

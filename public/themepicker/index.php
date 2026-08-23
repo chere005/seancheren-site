@@ -1,10 +1,12 @@
 <?php
-// A page served under /test/ (the sandbox mirror) loads lib-test/ instead of lib/, and one
-// served under /dev/ (a second, fixed sandbox slot) loads lib-dev/ — each mirror
-// isolated in code, config and data. The marketing pages hold no data, so they used to
-// keep a plain lib-only preamble; they carry this one since 2026-08-22, when site_nav()
-// started building its links through suite_base(). Without it a sandbox page could not
-// know its own base — and, worse, could not find a lib at all from one directory down.
+// A page served under /test/ (the sandbox mirror) loads lib-test/ instead of lib/,
+// isolated in code, config and data. The marketing pages hold no data, so they used
+// to keep a plain lib-only preamble; they carry this one since 2026-08-22, when a
+// sandbox page turned out to be unable to find a lib at all from one directory down.
+//
+// There was a /dev/ slot too, a second fixed sandbox. Sean, 2026-08-23: it
+// "shouldn't even exist anymore". It held no data — data-dev was never created —
+// so it went whole, code and all.
 // THREE signals, and all three are needed. __DIR__ with a bare strpos for '/test/'
 // missed the instance's OWN top-level page — /home/public/test/index.php sits in
 // /home/public/test, with no trailing slash — so the sandbox home silently loaded
@@ -15,15 +17,10 @@ $__host   = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
 $__test   = preg_match('#/test(/|$)#', __DIR__) === 1
          || strncmp($_SERVER['REQUEST_URI'] ?? '', '/test/', 6) === 0
          || strncmp($__host, 'test.', 5) === 0;
-$__dev    = preg_match('#/dev(/|$)#', __DIR__) === 1
-         || strncmp($_SERVER['REQUEST_URI'] ?? '', '/dev/', 5) === 0
-         || strncmp($__host, 'dev.', 4) === 0;
 $__libDir = null;
-$__cands  = $__dev
-    ? [__DIR__ . '/../../../lib-dev', '/home/protected/lib-dev']
-    : ($__test
-        ? [__DIR__ . '/../../../lib-test', '/home/protected/lib-test']
-        : [__DIR__ . '/../../lib',         '/home/protected/lib']);
+$__cands  = $__test
+    ? [__DIR__ . '/../../../lib-test', '/home/protected/lib-test']
+    : [__DIR__ . '/../../lib',      '/home/protected/lib'];
 foreach ($__cands as $__c) {
     if (is_file($__c . '/site.php')) { $__libDir = $__c; break; }
 }
@@ -40,9 +37,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'setth
     $t = (string) ($_POST['theme'] ?? '');
     if (isset(THEMES[$t])) {
         // Scope the cookie to this instance, like the session cookies: a theme picked
-        // on /test/ or /dev/ must not re-dress production's pages, or the other way.
+        // on /test/ must not re-dress production's pages, or the other way.
         $path = '/';
-        foreach (['/test/', '/dev/'] as $b) {
+        foreach (['/test/'] as $b) {
             if (strncmp($_SERVER['REQUEST_URI'] ?? '/', $b, strlen($b)) === 0) { $path = rtrim($b, '/') . '/'; }
         }
         setcookie('sitetheme', $t, [

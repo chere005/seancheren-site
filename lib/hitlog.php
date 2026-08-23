@@ -51,8 +51,7 @@ function hit_log_path(): string
 const HIT_LOG_MAX = 4 * 1024 * 1024;   // one rotation, so it cannot grow forever
 
 /**
- * Which instance served this — '' for production, 'test' or 'dev' for the
- * sandboxes. Read from the config the page already loaded, so it cannot
+ * Which instance served this — 'prod' for production, 'test' for the sandbox. Read from the config the page already loaded, so it cannot
  * disagree with which lib/ is actually in play.
  */
 function hit_instance(): string
@@ -69,7 +68,7 @@ function hit_app(): string
 {
     $p = (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
     // Strip the instance prefix so /test/chat and /chat are one app.
-    $p = preg_replace('#^/(test|dev)(?=/|$)#', '', $p) ?? $p;
+    $p = preg_replace('#^/test(?=/|$)#', '', $p) ?? $p;
     $first = strtok(trim($p, '/'), '/');
     if ($first === false || $first === '') { return 'home'; }
     // One clean token, capped — the segment reaches a log line, and a crafted

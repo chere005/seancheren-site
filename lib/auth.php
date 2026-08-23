@@ -304,9 +304,9 @@ function token_user(string $dir, string $token): ?string
 /**
  * This instance's session cookie name.
  *
- * Production, /test/ and /dev/ are three instances on ONE domain, so the cookie path
+ * Production and /test/ are two instances on ONE domain, so the cookie path
  * cannot separate them: a cookie set at '/' is sent to every path under it, including
- * /test/ and /dev/. The only thing that reliably keeps three logins apart on one host
+ * /test/. The only thing that reliably keeps two logins apart on one host
  * is a distinct cookie *name*, so each instance gets one — derived from its link
  * prefix, so a new instance is separate for free. Config 'session_name' overrides it.
  */
@@ -357,14 +357,14 @@ function session_boot(): void
     $year = 365 * 24 * 60 * 60;
     // Each instance keeps its own sessions: its own cookie name (the part that actually
     // separates them), its own cookie path, and its own session files. Being signed into
-    // production must not sign you into /test/ or /dev/, or the sandboxes are only a
+    // production must not sign you into /test/, or the sandbox is only a
     // sandbox for data and not for who you are.
     $name = session_cookie_name($cfg);
     if ($name !== null) { session_name($name); }
     $store = session_store_dir($cfg);
     if ($store !== null) { @session_save_path($store); }
     // '/dev' rather than '/' keeps the sandbox's cookie out of production's requests.
-    // Cookie-path matching is on '/' boundaries, so '/dev' covers /dev/… and not /devil.
+    // Cookie-path matching is on '/' boundaries, so '/test' covers /test/… and not /tester.
     $path = suite_base() === '' ? '/' : suite_base();
     @ini_set('session.gc_maxlifetime', (string) $year);
     @ini_set('session.cookie_lifetime', (string) $year);

@@ -79,9 +79,12 @@ RewriteCond %{HTTP_HOST} ^test\. [NC]
 RewriteCond %{REQUEST_URI} !^/test/
 RewriteRule ^(.*)$ /test/$1 [L]
 
-RewriteCond %{HTTP_HOST} ^dev\. [NC]
-RewriteCond %{REQUEST_URI} !^/dev/
-RewriteRule ^(.*)$ /dev/$1 [L]
+# The /dev slot is GONE (Sean, 2026-08-23: it "shouldn't even exist anymore").
+# It held no data — data-dev was never created — so nothing was migrated, and
+# the routing for it went with the directory. dev.seancheren.com is still an
+# ALIAS on the hosting account: removing that is a control-panel action, and
+# until it happens the subdomain resolves to this same docroot and serves the
+# production site rather than a sandbox.
 
 # …and the old paths on the APEX are GONE — not moved (Sean, 2026-08-20: "it
 # should just stop working"). A 301 would keep every old bookmark and link
@@ -107,7 +110,7 @@ RewriteRule ^(.*)$ /dev/$1 [L]
 # made possible: on test.seancheren.com the internal rewrite above maps
 # /calmind to /test/calmind, so ONE export serves all three and no instance
 # reaches into another's directory for its own assets.
-RewriteCond %{HTTP_HOST} !^(test|dev)\. [NC]
+RewriteCond %{HTTP_HOST} !^test\. [NC]
 RewriteCond %{REQUEST_URI} ^/(test|dev)/
 RewriteRule ^ - [R=404,L]
 
@@ -132,3 +135,29 @@ RewriteRule ^ - [R=404,L]
   CheckSpelling On
   CheckCaseOnly On
 </IfModule>
+
+# ── Nothing an editor or a VCS left behind is ever served ──────────────────
+#
+# 2026-08-23: https://seancheren.com/.index.html.swp answered 200. A Vim swap
+# file, sitting in the web root since April, handing out the account name, the
+# internal hostname (seancheren.nfshost.com) and the filesystem path to anyone
+# who asked. Found by sweeping the docroot for exactly this class of file
+# after Sean asked whether anything else was quietly reachable.
+#
+# The file is gone, but the CLASS is the thing to close: an editor crash, an
+# interrupted rsync or a stray `cp x x.bak` puts another one there, and
+# nothing about the deploy would notice. A 404 by pattern costs nothing and
+# does not depend on anybody remembering.
+#
+# .git is in here even though nothing checks out on the server — it is the
+# single worst thing that can appear in a docroot, and the rule is free.
+<FilesMatch "(^\.|\.(swp|swo|swn|bak|orig|rej|save|old|tmp|log|sql|ini|sh|conf)$|~$)">
+  Require all denied
+</FilesMatch>
+# …except the one dotted path that MUST be served: ACME lives there, and a
+# blocked .well-known means the certificate stops renewing and the whole site
+# goes to a TLS warning some weeks later. That failure would arrive long after
+# this change and look nothing like it.
+<FilesMatch "^\.well-known">
+  Require all granted
+</FilesMatch>

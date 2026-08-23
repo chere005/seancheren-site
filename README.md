@@ -45,18 +45,20 @@ demo accounts the test run signs in as.
 
 ## Deploy
 
-Three live instances share one source tree — **production** (`/`), a **`/test/` sandbox**
-and a **`/dev/` sandbox**, each with its own data, accounts and sessions — and two scripts
-deploy them: `deploy.sh` owns test and production, `deploy-dev.sh` owns `/dev/` and can't
-reach anything else. Both are one-way (Mac → server), lint first, and never send
-`config.php`, never touch the data dirs, never use `--delete`.
+Two live instances share one source tree — **production** (`/`) and a **`/test/`
+sandbox**, each with its own data, accounts and sessions — deployed by `deploy.sh`.
+It is one-way (Mac → server), lints first, and never sends `config.php`, never touches
+the data dirs, never uses `--delete`.
+
+There was a `/dev/` slot as well; it was removed on 2026-08-23 (Sean: it "shouldn't
+even exist anymore"). It carried no data — `data-dev` was never created — so nothing
+was migrated.
 
 ```sh
 ./deploy.sh            # → TEST only (the safe default)
 ./deploy.sh promote    # copy the verified TEST tree onto PROD (server-side)
 ./deploy.sh both       # → TEST and PROD at once
 ./deploy.sh --dry-run  # preview, change nothing
-./deploy-dev.sh        # → /dev/ only, from a clean git checkout of HEAD
 ```
 
 The SSH target lives in a gitignored `deploy.conf` (copy `deploy.conf.sample`). Secrets live

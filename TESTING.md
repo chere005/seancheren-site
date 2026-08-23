@@ -72,9 +72,8 @@ Two kinds of assertion, and the labels say which:
 
 ### `test-instance`
 Each instance gets its own session cookie name, so being signed into production is not
-being signed into `/test/` or `/dev/`. A sandbox config does not inherit production's
-accounts. `suite_base()` normalises a messy prefix (`test/` → `/test`). `deploy-dev.sh`
-can only ever write `/dev`, and `deploy.sh` knows nothing about it. What this cannot see:
+being signed into `/test/`. A sandbox config does not inherit production's
+accounts. `suite_base()` normalises a messy prefix (`test/` → `/test`). What this cannot see:
 the actual `/test/` URL on the live server, the isolation of `data-test/`, and
 `deploy.sh promote` — those are in *What only eyes can check*.
 
@@ -235,12 +234,12 @@ bare deploy is the test instance and production needs saying out loud. **`/test/
 belongs to the NEW CalMind monorepo (`~/GIT/CalMind`) as of 2026-08-08**: a suite test
 deploy must exclude the top-level `calmind/`, and `promote` must exclude it from the
 server-side copy — prod's suite is only ever updated by a direct prod deploy, and the
-suite's own pre-promote review now happens on `/dev/`. Also
+suite's own pre-promote review happens on `/test/`. Also
 `tools/seed-http.php`: the committed copy carries no key, compares in constant time, has
 no default data directory, and is never deployed. The `calmind/` repo split is guarded
 here too: `public/calmind` and the four CalMind-only lib files must be symlinks into the
 top-level `calmind/` area, and both deploy scripts must rsync with `-L` so the server
-always receives real files in the pre-split layout. `deploy-dev.sh` gets the same static
+always receives real files in the pre-split layout. The same static
 treatment: it parses, no rsync line uses `--delete`, its lib rsync excludes `config.php`,
 no rsync/rm line names a live data directory, and its destinations stay the /dev
 constants with the refusal guards standing — the script's whole reason to exist is that
@@ -271,7 +270,7 @@ failures only exist in standalone mode.
 - [ ] Nothing is clipped by the notch or the home indicator (`env(safe-area-inset-*)`).
 - [ ] Tapping a link doesn't kick you out to Safari with browser chrome.
 
-**The `/test/` and `/dev/` sandboxes** (after touching a deploy script or any cross-app link)
+**The `/test/` sandbox** (after touching a deploy script or any cross-app link)
 
 - [ ] `./deploy.sh test` publishes to `seancheren.com/test/`; the pages open there and the
       site nav, the logo and the login all stay inside `/test/` (never jump to the root).
@@ -279,8 +278,6 @@ failures only exist in standalone mode.
       appear in production (and vice versa) — `data-test/` is separate.
 - [ ] `./deploy.sh promote` leaves prod running what test ran; production's data and both
       `config.php` files are untouched.
-- [ ] `./deploy-dev.sh` publishes to `/dev/` only; its own login (not production's) signs
-      in there, and neither production nor `/test/` changed.
 
 **Gestures** — the apps that still have them
 

@@ -42,6 +42,28 @@ if (current_user() !== 'sean') {
 
 function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES); }
 
+/**
+ * EVERY TIME ON THIS PAGE, in 12-hour Central — Sean, 2026-08-23. Set here
+ * rather than trusted from the environment: the server keeps UTC, so a bare
+ * date() call reads five or six hours ahead depending on the month, and the
+ * one page whose whole job is "when did this happen" cannot afford that.
+ *
+ * Takes an epoch OR a string somebody already formatted (the history file
+ * carries strings written by report-status.sh, some of them from before this
+ * existed). A string that cannot be parsed comes back untouched — showing the
+ * original beats showing 1 Jan 1970.
+ */
+date_default_timezone_set('America/Chicago');
+function ct($when, string $fmt = 'g:i:s a'): string
+{
+    if ($when === null || $when === '') { return ''; }
+    $ts = is_numeric($when) ? (int) $when : strtotime((string) $when);
+    if ($ts === false || $ts <= 0) { return (string) $when; }
+    return date($fmt, $ts);
+}
+/** A date and a time, for something that may not be today. */
+function ctFull($when): string { return ct($when, 'M j, g:i a'); }
+
 // ------------------------------------------------------------- dtp/tdtp history
 // Written by CoreMind's bin/dtp.sh (report_status()) at the start and end of
 // every dtp/tdtp run, pushed here over the same SSH deploy credentials used
@@ -147,7 +169,7 @@ $repos = [
    'sync' => '<code>seancheren.com/CalMind/api</code> — every client syncs through it. Also on <code>test.</code> and <code>dev.</code>',
    'plat' => [
      'web'     => [0, 'seancheren.com/CalMind'],
-     'macos'   => [0, 'desktop app', '/Applications &middot; Tauri shell'],
+     'macos'   => [0, 'desktop app', '/Applications/CalMind.app<br>Tauri shell'],
      'windows' => [0, 'CI build', 'GitHub Actions artifact'],
      'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
      'watchos' => [0, 'verified', 'paired Apple Watch'],
@@ -157,7 +179,7 @@ $repos = [
    'sync' => '<code>seancheren.com/CalMind/api</code>, <code>chef</code> space. No backend of its own.',
    'plat' => [
      'web'     => [0, 'seancheren.com/ChefMind'],
-     'macos'   => [0, 'desktop app', '/Applications &middot; Tauri shell'],
+     'macos'   => [0, 'desktop app', '/Applications/ChefMind.app<br>Tauri shell'],
      'windows' => [0, 'CI build', 'GitHub Actions artifact'],
      'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
      'watchos' => [null, '&mdash;', 'no watch target'],
@@ -167,7 +189,7 @@ $repos = [
    'sync' => 'Nothing syncs — every transaction lives in the browser\'s own storage. The server is a doorway that checks the suite\'s sign-in and hands over the app.',
    'plat' => [
      'web'     => [0, 'seancheren.com/AcctMind'],
-     'macos'   => [0, 'desktop app', '/Applications &middot; Tauri shell'],
+     'macos'   => [0, 'desktop app', '/Applications/AcctMind.app<br>Tauri shell'],
      'windows' => [0, 'CI build', 'GitHub Actions artifact'],
      'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
      'watchos' => [null, '&mdash;', 'no watch target'],
@@ -177,41 +199,41 @@ $repos = [
    'sync' => 'Bonjour over the LAN, <code>_calmind-local._tcp</code>. No internet, no backup — the device is the only copy.',
    'plat' => [
      'web'     => [null, 'none'],
-     'macos'   => [0, 'desktop app', '/Applications &middot; Mac Catalyst'],
+     'macos'   => [0, 'desktop app', '/Applications/MyCalMind.app<br>Mac Catalyst'],
      'windows' => [null, '&mdash;', 'no Tauri shell'],
      'ios'     => [1, 'builds', "not installed — protects the phone's 3-app cap"],
      'watchos' => [1, 'builds', 'not installed to a watch'],
      'android' => [0, 'verified', 'local emulator'],
    ]],
   ['name' => 'CoreMind', 'group' => 'mindsuite', 'tag' => 'shared tooling',
-   'sync' => 'None. Distributes source into the other four repos; ships no app, holds no data.',
+   'sync' => 'Nothing syncs — it ships no app and holds no data.',
    'plat' => [
      'web' => [null, 'n/a'], 'macos' => [null, 'n/a'], 'windows' => [null, 'n/a'],
      'ios' => [null, 'n/a'], 'watchos' => [null, 'n/a'], 'android' => [null, 'n/a'],
    ]],
 
   ['name' => 'AgentSuite', 'group' => 'developer', 'tag' => 'conventions',
-   'sync' => 'None. Conventions and skills for AI agents across projects — text, not code.',
+   'sync' => 'Nothing syncs — text, not an app.',
    'plat' => [
      'web' => [null, 'none'], 'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
    ]],
   ['name' => 'LLMLOCAL', 'group' => 'developer', 'tag' => 'local models',
-   'sync' => 'None. Local-model experiments, run on this machine. Python, no deploy lane.',
+   'sync' => 'Nothing syncs — runs on this machine only.',
    'plat' => [
      'web' => [null, 'none'], 'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
    ]],
 
   ['name' => 'seancheren-site', 'group' => 'website', 'tag' => 'the hosting account',
-   'sync' => '<code>seancheren.com</code> on NearlyFreeSpeech — the account every Mind-suite app deploys a subpath into. Its own pages are Chat, the bookshelf, the themes bench and this one.',
+   'sync' => 'Nothing syncs — server-rendered pages, no client store and no API.',
    'plat' => [
      'web'     => [0, 'seancheren.com'],
      'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
    ]],
   ['name' => 'aki-tarot', 'group' => 'website', 'tag' => "Aki's, private repo",
-   'sync' => 'Deployed from its own private repo, not from seancheren-site — which is exactly how it stayed out of these checks until 2026-08-22.',
+   'sync' => 'Nothing syncs — server-rendered, no client store.',
    'plat' => [
      'web'     => [0, 'seancheren.com/akitarot'],
      'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
@@ -526,7 +548,11 @@ $cachePath = is_dir('/home/protected/status')
     : sys_get_temp_dir() . '/sc-status-reachability.json';
 $cacheTtl = 45;
 $results = null;
-if (is_file($cachePath) && (time() - filemtime($cachePath)) < $cacheTtl) {
+// ?recheck=1 throws the cache away and sweeps now — Sean, 2026-08-23: "run a
+// check now across all of status". Without it the only way to force a sweep
+// was to wait out the TTL.
+$forceCheck = isset($_GET['recheck']);
+if (!$forceCheck && is_file($cachePath) && (time() - filemtime($cachePath)) < $cacheTtl) {
     $results = json_decode((string) file_get_contents($cachePath), true);
 }
 if (!is_array($results)) {
@@ -545,6 +571,9 @@ if (!is_array($results)) {
     foreach (auth_scopes() as $key => $sc) {
         $results['scopes'][$key] = $sc['probe'] === null ? null : check_login($sc['probe']);
     }
+    // Stamped, so every row can say WHEN it was last actually asked rather
+    // than implying it is true right now.
+    $results['checked_at'] = time();
     @mkdir(dirname($cachePath), 0700, true);
     @file_put_contents($cachePath, json_encode($results));
     // A FRESH SWEEP IS A PING, and a ping is a sample worth keeping — it is
@@ -731,6 +760,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
     gap: 16px;
   }
   .eyebrow-row a { color: var(--ink-faint); text-decoration: none; font-size: 0.8rem; }
+  .eyebrow-row { }
+  .live-stamp { margin-left: auto; margin-right: 14px; font-family: var(--font-mono); font-size: 0.7rem; color: var(--ink-faint); }
   .eyebrow-row a:hover { color: var(--ink-soft); text-decoration: underline; }
 
   .eyebrow {
@@ -807,10 +838,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
   /* ---------- table ---------- */
 
   .table-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  /* Sean, 2026-08-23: "there's no padding on the left or right of the page..
-     give at least like 10 px". The page's own padding collapsed to nothing at
-     phone widths and the cards sat flush against the viewport edge. */
-  .page { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  /* Sean, 2026-08-23: "there's no padding on the left or right of the page".
+     The first attempt at this made it WORSE — a max(12px, …) override replaced
+     the 32px the desktop rule already had, so every width got 12. The floor
+     belongs in the media query, where the small screen is; here it only ever
+     widens. */
+  .page { padding-left: max(32px, env(safe-area-inset-left)); padding-right: max(32px, env(safe-area-inset-right)); }
   .table-scroll { overflow-x: auto; }
 
   table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1180px; }
@@ -868,7 +901,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
   tbody tr.outside:hover td { background: var(--surface-alt); }
   tbody tr.outside .repo-name { color: var(--ink-soft); }
 
-  .cell-note { display: block; margin-top: 5px; font-size: 0.74rem; color: var(--ink-faint); line-height: 1.4; }
+  .cell-note { display: block; margin-top: 5px; font-size: 0.74rem; color: var(--ink-faint); line-height: 1.45; }
+  .cell-note br { content: ""; display: block; margin-top: 1px; }
 
   /* The legend used to reuse .chip with an &nbsp; inside, which made every
      swatch a different width: a chip is a pill sized by its own text, and
@@ -938,6 +972,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .endpoint-head [data-col].sorted { color: var(--accent); }
   .endpoint-head [data-col]::after { content: " \2195"; opacity: 0.35; }
 
+  .recheck {
+    margin-left: 10px; font-size: 0.8rem; color: var(--accent); text-decoration: none;
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+  }
+  .recheck:hover { border-color: var(--accent); }
+
   .scope-chip {
     display: inline-block; font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.35;
     color: var(--ink-soft); background: var(--surface-alt);
@@ -981,7 +1021,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .endpoint-ms { font-family: var(--font-mono); color: var(--ink-faint); font-size: 0.78rem; }
 
   @media (max-width: 640px) {
-    .page { padding: 16px 12px 56px; }
+    .page {
+      padding-top: 16px; padding-bottom: 56px;
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+    }
     .endpoint-row { grid-template-columns: 1fr; gap: 6px; }
     .endpoint-head { display: none; }
     .graph-head { flex-direction: column; align-items: flex-start; }
@@ -995,12 +1039,13 @@ function cell_chip(?int $sev, string $repo, array $running): string
   <header>
     <div class="eyebrow-row">
       <div class="eyebrow">Mind-Suite &middot; deploy &amp; sync status</div>
+      <span class="live-stamp" id="live-stamp">live</span>
       <a href="?logout">Log out</a>
     </div>
     <?php // Computed, not written — see status_headline(). A green headline over
           // a red table is worse than no headline, so this can only say
           // everything is fine when the live checks and the matrix both do. ?>
-    <h1 class="hl-<?= $hlKind ?>"><span class="hl-dot"></span><?= $hlTitle ?></h1>
+    <h1 class="hl-<?= $hlKind ?>" data-live="headline"><span class="hl-dot"></span><?= $hlTitle ?></h1>
     <?php // A dek ONLY when there is something to say. It used to carry an
           // endpoint count and a domain count under a headline that had already
           // answered the question — Sean, 2026-08-23: "FLUFF". When everything
@@ -1052,11 +1097,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
         </thead>
         <tbody>
           <?php foreach ($rows as $r): ?>
-            <tr<?= $gkey === 'mindsuite' ? '' : ' class="outside"' ?>>
+            <tr data-live="repo:<?= e($r['name']) ?>"<?= $gkey === 'mindsuite' ? '' : ' class="outside"' ?>>
               <td>
                 <span class="repo-name"><?= e($r['name']) ?></span>
                 <span class="repo-tag"><?= isset($RUNNING[$r['name']])
-                  ? '<span class="running-tag">' . e(($latest['kind'] ?? 'dtp')) . ' running…</span>'
+                  ? '<span class="running-tag">' . e(($latest['kind'] ?? 'dtp')) . ' since ' . e(ct($latest['started_at'] ?? '', 'g:i a')) . '</span>'
                   : e($r['tag']) ?></span>
               </td>
               <?php // Web leads, then the prose, then the five device columns —
@@ -1207,9 +1252,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
           <?php endforeach; endforeach; ?>
         </svg>
         <div class="graph-axis">
-          <span><?= e(date('H:i', $firstTs)) ?></span>
+          <span><?= e(ct($firstTs, 'g:i a')) ?></span>
           <span><?= $n ?> pings &middot; top = fine, bottom = needs attention</span>
-          <span><?= e(date('H:i', $lastTs)) ?></span>
+          <span><?= e(ct($lastTs, 'g:i a')) ?></span>
         </div>
         <div class="legend" style="border-top:none;background:none;padding:10px 0 0">
           <?php foreach ($PLATFORMS as $plat => $platName): ?>
@@ -1253,33 +1298,38 @@ function cell_chip(?int $sev, string $repo, array $running): string
       </div>
     </div>
   <?php else: ?>
-    <div class="run-buttons">
+    <div class="run-buttons" data-live="runs">
       <?php foreach ($history as $i => $run):
         $sev = (int) ($run['severity'] ?? 3);
         $isRun = ($run['status'] ?? '') === 'running';
         $cls = $isRun ? 'running' : severity_chip_class($sev);
       ?>
         <button class="run-btn<?= $i === 0 ? ' selected' : '' ?>" data-run="<?= $i ?>">
-          <span class="t"><?= e($run['started_at'] ?? '?') ?></span>
+          <span class="t"><?= e(ctFull($run['started_at'] ?? '?')) ?></span>
           <?php // The separator is OUTSIDE e(): escaping '&middot;' turns its own
                 // ampersand into &amp; and the button reads a literal "&middot;". ?>
           <span class="k"><?= e($run['kind'] ?? 'dtp') ?> &middot; <?= e($run['target'] ?? '?') ?></span>
-          <span class="chip <?= $cls ?>"><?= e($isRun ? 'running' : ($run['status'] ?? '?')) ?></span>
+          <?php // "instead of just running, it should say the time the job was
+                // started" — a run in flight is identified by when it began,
+                // which is also how you tell a live one from a stuck one. ?>
+          <span class="chip <?= $cls ?>"><?= $isRun
+            ? 'started ' . e(ct($run['started_at'] ?? '', 'g:i a'))
+            : e($run['status'] ?? '?') ?></span>
         </button>
       <?php endforeach; ?>
     </div>
 
-    <div class="run-detail" id="run-detail-box">
+    <div class="run-detail" id="run-detail-box" data-live="rundetail">
       <?php $r0 = $history[0]; ?>
-      <p><strong><?= e($r0['kind'] ?? 'dtp') ?> &middot; <?= e($r0['target'] ?? '?') ?></strong> &mdash; started <?= e($r0['started_at'] ?? '?') ?><?= !empty($r0['finished_at']) ? ', finished ' . e($r0['finished_at']) : ' (running)' ?></p>
+      <p><strong><?= e($r0['kind'] ?? 'dtp') ?> &middot; <?= e($r0['target'] ?? '?') ?></strong> &mdash; started <?= e(ctFull($r0['started_at'] ?? '?')) ?><?= !empty($r0['finished_at']) ? ', finished ' . e(ct($r0['finished_at'], 'g:i a')) : ' (running)' ?></p>
       <p><?= e($r0['summary'] ?? 'No summary recorded.') ?></p>
     </div>
 
     <script>
       const runs = <?= json_encode(array_map(function ($r) {
           return [
-              'started_at' => $r['started_at'] ?? '?',
-              'finished_at' => $r['finished_at'] ?? null,
+              'started_at' => ctFull($r['started_at'] ?? '?'),
+              'finished_at' => empty($r['finished_at']) ? null : ct($r['finished_at'], 'g:i a'),
               'kind' => $r['kind'] ?? 'dtp',
               'target' => $r['target'] ?? '?',
               'status' => $r['status'] ?? '?',
@@ -1304,12 +1354,17 @@ function cell_chip(?int $sev, string $repo, array $running): string
   <!-- ============================================================ LIVE STATUS -->
   <div class="tab-panel" id="tab-live">
 
-  <p class="dek">Server-side reachability checks, cached <?= $cacheTtl ?>s. The page itself refreshes every 60s.</p>
+  <?php $checkedAt = (int) ($results['checked_at'] ?? @filemtime($cachePath) ?: time()); ?>
+  <p class="dek">
+    Checked <strong><?= e(ct($checkedAt)) ?></strong>
+    &middot; every <?= $cacheTtl ?>s, and the page updates in place without reloading.
+    <a class="recheck" href="?recheck=1#live">Check now</a>
+  </p>
 
   <?php // Hits, from lib/hitlog.php — every page on this host writes one line
         // per request into one log, so this counts the whole site rather than
         // whichever app happened to have logging wired up. ?>
-  <div class="kpis" style="margin-bottom:22px">
+  <div class="kpis" data-live="hits" style="margin-bottom:22px">
     <?php foreach ($hits as $label => $h): ?>
       <div class="kpi">
         <span class="n"><?= number_format($h['hits']) ?></span>
@@ -1334,7 +1389,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         </div>
         <div class="domain-rows">
         <?php foreach ($list as $ep): $r = $results[$key][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
-          <div class="endpoint-row">
+          <div class="endpoint-row" data-live="ep:<?= e($ep['url']) ?>" title="checked <?= e(ct($checkedAt)) ?>">
             <div data-sort="<?= e($ep['label']) ?>"><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
             <?php // STATUS and AUTH are separate columns now — Sean, 2026-08-22:
                   // "status should be separate from auth on live status". They
@@ -1353,7 +1408,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
               $lg = $results['scopes'][$sk] ?? null;
               echo $sk === 'public' ? 0 : ($lg === null ? 2 : ['ok' => 1, 'failed' => 3, 'skipped' => 2][$lg['state']] ?? 2);
             ?>"><?php
-              if ($sk === 'public')               { echo '<span class="scope-chip">none needed</span>'; }
+              if ($sk === 'public')               { echo '<span class="scope-chip">n/a</span>'; }
               elseif ($lg === null)               { echo '<span class="scope-chip">not probed</span>'; }
               elseif ($lg['state'] === 'ok')      { echo '<span class="chip live" title="' . e($lg['why']) . '">sign-in works</span>'; }
               elseif ($lg['state'] === 'failed')  { echo '<span class="chip crit" title="' . e($lg['why']) . '">sign-in BROKEN</span>'; }
@@ -1430,7 +1485,69 @@ function cell_chip(?int $sev, string $repo, array $running): string
     });
   });
 
-  setTimeout(() => location.reload(), 60000);
+  // ── LIVE, WITHOUT RELOADING ────────────────────────────────────────────
+  // Sean, 2026-08-23: "the page should live update without refreshing". It
+  // used to call location.reload() every 60s, which threw away the tab, the
+  // scroll position, the column sort and every picker — and did it while
+  // somebody was reading. A release is exactly when the page is being
+  // watched, and exactly when it was yanking itself out from under them.
+  //
+  // It re-fetches ITS OWN URL and swaps only the elements marked data-live.
+  // One renderer, still PHP: the alternative is a JSON endpoint plus a second
+  // copy of every chip rule in JavaScript, and two renderers of the same fact
+  // disagree the first time one is edited.
+  const LIVE_MS = 20000;
+  let liveFails = 0;
+
+  function applyLive(doc) {
+    let changed = 0;
+    doc.querySelectorAll('[data-live]').forEach(fresh => {
+      const key = fresh.getAttribute('data-live');
+      const here = document.querySelector('[data-live="' + CSS.escape(key) + '"]');
+      if (!here) { return; }
+      if (here.innerHTML !== fresh.innerHTML) { here.innerHTML = fresh.innerHTML; changed++; }
+      // The headline carries its state in a CLASS, not in its text — without
+      // this the dot stays green over a red table.
+      if (here.className !== fresh.className) { here.className = fresh.className; }
+    });
+    // The dek appears and disappears; it is a whole element, not a swap.
+    const freshDek = doc.querySelector('header .dek');
+    const hereDek = document.querySelector('header .dek');
+    if (freshDek && hereDek) { hereDek.innerHTML = freshDek.innerHTML; }
+    else if (freshDek && !hereDek) { document.querySelector('header').appendChild(freshDek.cloneNode(true)); }
+    else if (!freshDek && hereDek) { hereDek.remove(); }
+    return changed;
+  }
+
+  async function tick() {
+    try {
+      // X-Live-Poll so the hit log does not count a poll as a page view — a
+      // tab left open would otherwise report 180 visits an hour by itself.
+      const res = await fetch(location.pathname, {
+        headers: { 'X-Live-Poll': '1' }, cache: 'no-store', credentials: 'same-origin',
+      });
+      if (!res.ok) { throw new Error('HTTP ' + res.status); }
+      const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+      // A session that expired returns the sign-in page, which has no
+      // data-live regions at all. Reloading is right THEN, and only then.
+      if (!doc.querySelector('[data-live]')) { location.reload(); return; }
+      applyLive(doc);
+      liveFails = 0;
+      const stamp = document.getElementById('live-stamp');
+      if (stamp) {
+        stamp.textContent = 'updated ' + new Date().toLocaleTimeString('en-US',
+          { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      }
+    } catch (e) {
+      // Back off rather than hammer a server that is already unwell — this
+      // page's own polling must not be part of the problem it is reporting.
+      liveFails++;
+      const stamp = document.getElementById('live-stamp');
+      if (stamp) { stamp.textContent = 'update failed — retrying'; }
+    }
+    setTimeout(tick, LIVE_MS * Math.min(8, 1 + liveFails));
+  }
+  setTimeout(tick, LIVE_MS);
 </script>
 
 </body>

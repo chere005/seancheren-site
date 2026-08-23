@@ -91,6 +91,10 @@ function hit_log(?string $app = null, ?string $user = null): void
     // would be its own, and the number would rise the more often it was looked
     // at. The probe announces itself with this header.
     if (!empty($_SERVER['HTTP_X_STATUS_PROBE'])) { return; }
+    // Nor a live poll. The status page re-fetches itself every 20s to update
+    // in place; a tab left open would otherwise report 180 visits an hour on
+    // its own and drown every real one.
+    if (!empty($_SERVER['HTTP_X_LIVE_POLL'])) { return; }
     // Nor should a preflight or a HEAD: neither renders anything.
     $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
     if ($method === 'OPTIONS' || $method === 'HEAD') { return; }

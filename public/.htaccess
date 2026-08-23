@@ -14,12 +14,24 @@ ServerSignature Off
 # all-lowercase form is deliberately not in the alternation — it would rewrite to
 # itself and loop.
 RewriteEngine On
-RewriteCond %{REQUEST_URI} ^(.*)/(?:CalMind|Calmind|CALMIND|calMind)((?:/.*)?)$
-# (https://%{HTTP_HOST} for the same reason as the /request alias below: a
-# path-only target comes back as http:// on this host. Measured 2026-08-21 —
-# https://seancheren.com/CalMind was redirecting to http://seancheren.com/
-# calmind, in the clear, and only the site's http->https rule saved it.)
-RewriteRule ^ https://%{HTTP_HOST}%1/calmind%2 [R=301,L]
+
+# ── /CalMind is the canonical spelling (Sean, 2026-08-22) ───────────────────
+#
+# Served by a SYMLINK on the host, not by a rule here: /home/public/CalMind ->
+# calmind, in all three instances. That makes the capitalised path really
+# exist, which is what a POST needs — and the POST is the whole point.
+#
+# The path used to 301 to /calmind, and a 301 is not safely followed by a
+# POST: browsers and PHP's stream wrapper both drop the body or re-issue as
+# GET. So https://seancheren.com/CalMind/api/index.php answered every sync
+# attempt with a redirect to a POST-only endpoint. The status page's own API
+# probe is what caught it — it reported 301 and never reached the API at all.
+#
+# A GET of /CalMind/ still lands on /calmind/ via mod_speling's case
+# correction below, which is harmless: browsers follow it, it is the same
+# content, and mod_speling deliberately never redirects a POST. Both spellings
+# work, so every installed PWA — all of which derive /calmind/api from their
+# own origin — keeps working byte for byte.
 
 # The meeting-request link, at the short address people are given (Sean,
 # 2026-08-21: "make seancheren.com/request point to seancheren.com/calmind/

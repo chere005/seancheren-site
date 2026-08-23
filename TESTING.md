@@ -99,6 +99,16 @@ plain text, not `ENC1:`; the writer leaves it group-readable and the data dir
 group-traversable, which is what lets the SSH login tail it on the live host.
 *(By eye: nothing — there is no UI for this log; `tools/usagelog.sh` reads it over SSH.)*
 
+### `hits`
+One line per page view in `hits.log`, five tab-separated fields, and the
+NEGATIVES that are the actual promise: no IP address, no query string, no path
+below the first segment. A request carrying `X-Status-Probe` leaves no line —
+the status page probes every endpoint on this host every 45s, and without that
+guard most of the hits it reports would be its own. A public page logs `-` for
+the user and a signed-in one names them. `hit_counts()` counts only inside its
+window and counts signed-in visitors apart.
+*(By eye: the KPI row on the status page's Live tab.)*
+
 ### `lib`
 Output is escaped: a palette named `<script>alert(1)</script>` comes back as
 `&lt;script&gt;` and never as the raw tag. The rest of this area went with `lib/util.php`

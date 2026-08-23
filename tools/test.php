@@ -95,10 +95,11 @@ $PORT = 0; $SRV = null;
  * One request against the dev server. Redirects are never followed — where a POST sends
  * you is half of what's being tested. $jar carries the session cookie between calls.
  */
-function req(string $method, string $path, array $post = [], ?array &$jar = null, bool $ajax = false): array
+function req(string $method, string $path, array $post = [], ?array &$jar = null, bool $ajax = false, array $extraHeaders = []): array
 {
     global $PORT;
     $headers = ["Host: 127.0.0.1:$PORT", 'Connection: close'];
+    foreach ($extraHeaders as $h) { $headers[] = $h; }
     if ($jar) {
         $bits = [];
         foreach ($jar as $k => $v) { $bits[] = "$k=$v"; }
@@ -1371,6 +1372,65 @@ t('the log file lives outside the web root and is plain text', function () {
 // Static checks, because a deploy is the one thing here that can destroy data and the
 // one thing no test run may actually perform. These are the promises deploy.sh makes in
 // its own header; this is the test that it still keeps them.
+area('hits');
+
+t('a page view writes one line, and it holds no address and no path', function () {
+    $log = datadir() . '/hits.log';
+    @unlink($log);
+    req('GET', '/about/');
+    req('GET', '/projects/?utm=somewhere');
+    $b = (string) @file_get_contents($log);
+    $lines = array_values(array_filter(explode("\n", trim($b))));
+    eq(2, count($lines), 'one line per page view');
+    foreach ($lines as $l) {
+        eq(5, count(explode("\t", $l)), 'five fields: time, instance, app, method, user');
+    }
+    // The NEGATIVE is the promise. usage.log carries IPs for the security
+    // question; this one answers "how busy is it" and must not become a
+    // second copy of that.
+    hasnt('127.0.0.1', $b, 'no IP address');
+    hasnt('utm', $b, 'no query string');
+    hasnt('/projects/', $b, 'no path — the app name only');
+    has("\tabout\t", $b, 'the app is the first path segment');
+    has("\tprojects\t", $b, 'and nothing below it');
+});
+
+t('the status page does not count its own probes', function () {
+    // Without this the reported hits would mostly be the reachability sweep,
+    // and the number would climb the more often the page was looked at.
+    $log = datadir() . '/hits.log';
+    @unlink($log);
+    req('GET', '/about/', [], $jar, false, ['X-Status-Probe: 1']);
+    eq('', trim((string) @file_get_contents($log)), 'a probe leaves no line');
+    req('GET', '/about/');
+    ok(trim((string) @file_get_contents($log)) !== '', 'an ordinary visit still does');
+});
+
+t('a signed-in view names the user; a public one does not', function () {
+    $log = datadir() . '/hits.log';
+    @unlink($log);
+    req('GET', '/about/');
+    $jar = login('example', 'examplepassword');
+    req('GET', '/akisthemes/', [], $jar);
+    $b = (string) @file_get_contents($log);
+    has("\thome\tGET\t-\n", str_replace("\tabout\t", "\thome\t", $b), 'a public page logs no user');
+    has("\texample\n", $b, 'a signed-in page names who');
+});
+
+t('hit_counts only counts inside its window', function () {
+    $log = datadir() . '/hits.log';
+    $old = time() - 7 * 86400;
+    file_put_contents($log, implode("\n", [
+        "$old\tprod\tabout\tGET\t-",
+        (time() - 30) . "\tprod\tabout\tGET\t-",
+        (time() - 30) . "\tprod\tchat\tGET\tsomebody",
+    ]) . "\n");
+    $c = hit_counts(['hour' => 3600, 'week' => 8 * 86400]);
+    eq(2, $c['hour']['hits'], 'the week-old line is outside the hour');
+    eq(3, $c['week']['hits'], 'and inside the week');
+    eq(1, $c['hour']['people'], 'signed-in visitors are counted apart');
+});
+
 area('deploy');
 
 

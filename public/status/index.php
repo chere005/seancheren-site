@@ -78,6 +78,119 @@ function severity_chip_class(int $sev): string
     };
 }
 
+// ------------------------------------------------------------- the repo matrix
+/**
+ * THE PLATFORM MATRIX, AS DATA — Sean, 2026-08-22: "group MindSuite, Developer
+ * (AgentSuite/LocalLLM), and website repos ... make a line plot for each
+ * category on history where each line is a repo's web/server status, macos
+ * status, windows status, ios status, watchos status, and android status".
+ *
+ * It was hand-written table markup until then, which meant the Current tab,
+ * the per-ping samples and the graphs could each have said something
+ * different about the same repo. One array, three readers.
+ *
+ * Severity: 0 live, 1 deliberate, 2 small issue, 3 needs attention, null =
+ * nothing to report (no such target). null is not a bad score — it is the
+ * absence of one, and the graphs leave it out rather than plotting a zero.
+ */
+$PLATFORMS = [
+    'web' => 'Web / server', 'macos' => 'macOS', 'windows' => 'Windows',
+    'ios' => 'iOS', 'watchos' => 'watchOS', 'android' => 'Android',
+];
+$REPO_GROUPS = [
+    'mindsuite' => ['Mind-Suite', 'The five repos and the apps they ship.'],
+    'developer'  => ['Developer', 'Tooling for how the work gets done, not things that ship to a device.'],
+    'website'    => ['Website', 'What is served from the seancheren.com account, suite or not.'],
+];
+
+/** [severity, label, note] — note optional. */
+$repos = [
+  ['name' => 'CalMind', 'group' => 'mindsuite', 'tag' => 'origin app',
+   'sync' => '<code>seancheren.com/CalMind/api</code> — every client syncs through it. Also on <code>test.</code> and <code>dev.</code>',
+   'plat' => [
+     'web'     => [0, 'seancheren.com/CalMind'],
+     'macos'   => [0, 'Tauri desktop'],
+     'windows' => [0, 'CI build'],
+     'ios'     => [0, 'on phone', '1 of 3 device slots'],
+     'watchos' => [0, 'CalMindWatch', 'installs to paired watch'],
+     'android' => [0, 'installs &amp; runs'],
+   ]],
+  ['name' => 'ChefMind', 'group' => 'mindsuite', 'tag' => 'split from CalMind',
+   'sync' => '<code>seancheren.com/CalMind/api</code>, <code>chef</code> space. No backend of its own.',
+   'plat' => [
+     'web'     => [0, 'seancheren.com/ChefMind'],
+     'macos'   => [0, 'installed', '/Applications, verified launching'],
+     'windows' => [0, 'CI build'],
+     'ios'     => [0, 'on phone', '1 of 3 — reinstalled 08-22'],
+     'watchos' => [null, '&mdash;', 'no watch target'],
+     'android' => [0, 'installs &amp; runs'],
+   ]],
+  ['name' => 'AcctMind', 'group' => 'mindsuite', 'tag' => 'separate build',
+   'sync' => '<code>seancheren.com/AcctMind</code>, and <code>test.seancheren.com/AcctMind</code>.',
+   'plat' => [
+     'web'     => [0, 'seancheren.com/AcctMind'],
+     'macos'   => [0, 'installed', '/Applications, verified launching'],
+     'windows' => [0, 'CI build'],
+     'ios'     => [0, 'on phone', '1 of 3 slots'],
+     'watchos' => [null, '&mdash;', 'no watch target'],
+     'android' => [0, 'installs &amp; runs'],
+   ]],
+  ['name' => 'MyCalMind', 'group' => 'mindsuite', 'tag' => 'extracted, renamed',
+   'sync' => 'Bonjour over the LAN, <code>_calmind-local._tcp</code>. No internet, no backup — the device is the only copy.',
+   'plat' => [
+     'web'     => [null, 'none'],
+     'macos'   => [0, 'installed', 'real Mac Catalyst app, verified running — the ReactNativeDependencies bundle repair is re-applied every build, never fixed upstream'],
+     'windows' => [null, '&mdash;', 'no Tauri shell'],
+     'ios'     => [1, 'build-only', "deliberate — protects the phone's 3-app cap"],
+     'watchos' => [1, 'builds', 'CalMindWatch product — not installed to a watch'],
+     'android' => [0, 'installs &amp; runs'],
+   ]],
+  ['name' => 'CoreMind', 'group' => 'mindsuite', 'tag' => 'shared tooling',
+   'sync' => 'None. Distributes source into the other four repos; ships no app, holds no data.',
+   'plat' => [
+     'web' => [null, 'n/a'], 'macos' => [null, 'n/a'], 'windows' => [null, 'n/a'],
+     'ios' => [null, 'n/a'], 'watchos' => [null, 'n/a'], 'android' => [null, 'n/a'],
+   ]],
+
+  ['name' => 'AgentSuite', 'group' => 'developer', 'tag' => 'conventions',
+   'sync' => 'None. Conventions and skills for AI agents across projects — text, not code.',
+   'plat' => [
+     'web' => [null, 'none'], 'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
+     'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
+   ]],
+  ['name' => 'LLMLOCAL', 'group' => 'developer', 'tag' => 'local models',
+   'sync' => 'None. Local-model experiments, run on this machine. Python, no deploy lane.',
+   'plat' => [
+     'web' => [null, 'none'], 'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
+     'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
+   ]],
+
+  ['name' => 'seancheren-site', 'group' => 'website', 'tag' => 'the hosting account',
+   'sync' => '<code>seancheren.com</code> on NearlyFreeSpeech — the account every Mind-suite app deploys a subpath into. Its own pages are Chat, the bookshelf, the themes bench and this one.',
+   'plat' => [
+     'web'     => [0, 'seancheren.com'],
+     'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
+     'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
+   ]],
+  ['name' => 'aki-tarot', 'group' => 'website', 'tag' => "Aki's, private repo",
+   'sync' => 'Deployed from its own private repo, not from seancheren-site — which is exactly how it stayed out of these checks until 2026-08-22.',
+   'plat' => [
+     'web'     => [0, 'seancheren.com/akitarot'],
+     'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
+     'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
+   ]],
+];
+
+/** Which live endpoints decide a repo's WEB severity — the one row of the
+ *  matrix that is measured rather than recorded. */
+$WEB_PROBE = [
+    'CalMind'         => ['https://seancheren.com/CalMind/', 'https://seancheren.com/CalMind/api/index.php'],
+    'ChefMind'        => ['https://seancheren.com/ChefMind/'],
+    'AcctMind'        => ['https://seancheren.com/AcctMind/'],
+    'seancheren-site' => ['https://seancheren.com/'],
+    'aki-tarot'       => ['https://seancheren.com/akitarot/'],
+];
+
 // ------------------------------------------------------------- hits
 // The hit log is written by lib/hitlog.php, which every page on this host
 // inherits — see that file's header for why it is separate from usage.log.
@@ -95,38 +208,42 @@ $samplePath = is_dir('/home/protected/status')
     : __DIR__ . '/../../data/status-samples.jsonl';
 const SAMPLE_KEEP = 120;   // at a 45s cache TTL, about an hour and a half of pings
 
-/** The apps the graph draws, in the Current tab's order. */
-function sample_apps(): array { return ['CalMind', 'ChefMind', 'AcctMind', 'site']; }
-
 /**
- * One app's severity from a sweep: 0 while every endpoint answered, 3 as soon
- * as one did not. A GATED endpoint counts as answering — the server is up and
- * asking for credentials, which is the correct behaviour, not an outage.
+ * One sample row per ping: `repo.platform => severity`, for every cell of the
+ * matrix that has one. The platform rows are RECORDED rather than measured —
+ * they only move when the matrix is edited or a build changes — so their lines
+ * are flat by design. Web is the one that is actually probed, and the one that
+ * dips.
  */
-function sample_severity(array $endpoints, array $results, string $app): ?int
+function status_sample_row(array $repos, array $webProbe, array $endpoints, array $results): array
 {
-    $seen = false;
-    foreach ($endpoints as $group => $domains) {
-        foreach ($domains as $list) {
-            foreach ($list as $ep) {
-                if (($ep['app'] ?? '') !== $app) { continue; }
-                $seen = true;
-                $r = $results[$group][$ep['url']] ?? null;
-                if (!$r || empty($r['ok'])) { return 3; }
+    // Every probed URL's result, flattened, so a repo can ask about its own.
+    $byUrl = [];
+    foreach ($results as $group => $rows) {
+        foreach ($rows as $url => $r) { $byUrl[$url] = $r; }
+    }
+    $row = ['ts' => time(), 's' => []];
+    foreach ($repos as $repo) {
+        foreach ($repo['plat'] as $plat => $cell) {
+            $sev = $cell[0] ?? null;
+            if ($plat === 'web' && isset($webProbe[$repo['name']])) {
+                // MEASURED, not recorded: the worst of this repo's own probes.
+                // A gated 401 counts as up — the server answered.
+                $sev = 0;
+                foreach ($webProbe[$repo['name']] as $u) {
+                    if (empty($byUrl[$u]['ok'])) { $sev = 3; break; }
+                }
             }
+            if ($sev === null) { continue; }
+            $row['s'][$repo['name'] . '.' . $plat] = (int) $sev;
         }
     }
-    return $seen ? 0 : null;
+    return $row;
 }
 
-function status_sample_record(array $endpoints, array $results): void
+function status_sample_record(array $row): void
 {
     global $samplePath;
-    $row = ['ts' => time(), 's' => []];
-    foreach (sample_apps() as $app) {
-        $sev = sample_severity($endpoints, $results, $app);
-        if ($sev !== null) { $row['s'][$app] = $sev; }
-    }
     @mkdir(dirname($samplePath), 0700, true);
     @file_put_contents($samplePath, json_encode($row) . "\n", FILE_APPEND | LOCK_EX);
     // Trim in place. JSONL rather than one JSON array precisely so the append
@@ -210,49 +327,144 @@ function check_url(string $url, ?string $post = null): array
  * `app` names which row of the Current tab an endpoint belongs to, so the
  * History graph can draw one line per app across the pings.
  */
+/**
+ * DOES THE LOGIN ACTUALLY WORK — not just "the URL answered".
+ *
+ * Sean, 2026-08-22: "i don't see the point of up - asks to sign in... you
+ * should be able to test a login and post if logging in is also up or just the
+ * url itself". He is right: a 401 says a server is running, and says nothing
+ * about whether anybody can get in. A sign-in that has been broken by a bad
+ * config change answers 401 exactly as cheerfully as a healthy one.
+ *
+ * CREDENTIALS ARE NEVER IN THIS REPO. They come from `status_probes` in
+ * lib/config.php, which is gitignored, never deployed, and hand-kept on the
+ * server — the same file the site's own accounts live in. With none
+ * configured the column says "not probed" rather than anything green:
+ * a check that cannot run must never read as a check that passed.
+ *
+ *   'status_probes' => [
+ *     'calmind'  => ['user' => '…', 'pass' => '…'],   // CalMind's API
+ *     'acctmind' => ['user' => '…', 'pass' => '…'],   // AcctMind, HTTP Basic
+ *     'site'     => ['user' => '…', 'pass' => '…'],   // this site's own login
+ *   ],
+ *
+ * Use a PROBE ACCOUNT, not a real one. It signs in every 45 seconds forever;
+ * that belongs to an account whose only job is to prove sign-in works.
+ */
+function probe_creds(string $key): ?array
+{
+    $all = app_config()['status_probes'] ?? null;
+    if (!is_array($all) || !isset($all[$key])) { return null; }
+    $c = $all[$key];
+    return (!empty($c['user']) && !empty($c['pass'])) ? ['user' => (string) $c['user'], 'pass' => (string) $c['pass']] : null;
+}
+
+/** One HTTP round trip, returning [status, body]. */
+function probe_http(string $url, string $method, array $headers, ?string $body): array
+{
+    $h = "X-Status-Probe: 1\r\n" . implode('', array_map(fn($k, $v) => "$k: $v\r\n", array_keys($headers), $headers));
+    $ctx = stream_context_create([
+        'http' => ['method' => $method, 'timeout' => 6, 'ignore_errors' => true,
+                   'header' => $h, 'follow_location' => 0] + ($body === null ? [] : ['content' => $body]),
+        'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $fh = @fopen($url, 'r', false, $ctx);
+    if ($fh === false) { return [0, '']; }
+    $status = 0;
+    foreach (stream_get_meta_data($fh)['wrapper_data'] ?? [] as $line) {
+        if (preg_match('#^HTTP/\S+\s+(\d+)#', $line, $m)) { $status = (int) $m[1]; }
+    }
+    $out = (string) @stream_get_contents($fh, 4096);
+    fclose($fh);
+    return [$status, $out];
+}
+
+/**
+ * @return array{state:'ok'|'failed'|'skipped', why:string}
+ */
+function check_login(array $login): array
+{
+    $creds = probe_creds($login['cred']);
+    if ($creds === null) {
+        return ['state' => 'skipped', 'why' => "no status_probes['" . $login['cred'] . "'] in config.php"];
+    }
+    switch ($login['kind']) {
+        case 'calmind-api':
+            // The real sign-in, the one every client makes.
+            [$st, $body] = probe_http($login['url'], 'POST', ['Content-Type' => 'application/json'],
+                json_encode(['action' => 'login', 'username' => $creds['user'], 'password' => $creds['pass']]));
+            $j = json_decode($body, true);
+            if ($st === 200 && !empty($j['ok']) && !empty($j['token'])) {
+                return ['state' => 'ok', 'why' => 'signed in, token issued'];
+            }
+            return ['state' => 'failed', 'why' => 'HTTP ' . $st . ' — ' . substr(strip_tags($body), 0, 80)];
+
+        case 'http-basic':
+            [$st] = probe_http($login['url'], 'GET',
+                ['Authorization' => 'Basic ' . base64_encode($creds['user'] . ':' . $creds['pass'])], null);
+            if ($st >= 200 && $st < 400) { return ['state' => 'ok', 'why' => 'HTTP ' . $st . ' with credentials']; }
+            return ['state' => 'failed', 'why' => 'HTTP ' . $st . ' with credentials'];
+
+        case 'site-form':
+            // This site's own login answers a good password with a 302 to
+            // LOGIN_LANDING and a bad one with the form again, 200.
+            [$st] = probe_http($login['url'], 'POST', ['Content-Type' => 'application/x-www-form-urlencoded'],
+                http_build_query(['username' => $creds['user'], 'password' => $creds['pass']]));
+            if ($st === 302) { return ['state' => 'ok', 'why' => 'password accepted, redirected in']; }
+            return ['state' => 'failed', 'why' => 'HTTP ' . $st . ' — a good password redirects'];
+    }
+    return ['state' => 'skipped', 'why' => 'no probe defined'];
+}
+
 $endpoints = [
     'mindsuite' => [
         'seancheren.com' => [
-            ['label' => 'CalMind',    'app' => 'CalMind',  'url' => 'https://seancheren.com/calmind/',
-             'auth' => "CalMind's own accounts — bearer token or passkey, never this site's login"],
-            ['label' => 'CalMind API', 'app' => 'CalMind', 'url' => 'https://seancheren.com/calmind/api/index.php',
+            ['label' => 'CalMind',    'app' => 'CalMind',  'url' => 'https://seancheren.com/CalMind/',
+             'scope' => 'CalMind accounts', 'auth' => "CalMind's own accounts — bearer token or passkey, never this site's login"],
+            ['label' => 'CalMind API', 'app' => 'CalMind', 'url' => 'https://seancheren.com/CalMind/api/index.php',
+             'scope' => 'CalMind accounts',
              'post' => '{"action":"spaces"}',
+             'login' => ['kind' => 'calmind-api', 'cred' => 'calmind', 'url' => 'https://seancheren.com/CalMind/api/index.php'],
              'auth' => "CalMind's own bearer token on every action except this one — `spaces` answers without auth, which is what makes it safe to probe from here"],
             ['label' => 'ChefMind',   'app' => 'ChefMind', 'url' => 'https://seancheren.com/ChefMind/',
-             'auth' => "Delegated — no backend of its own; signs in through CalMind's API, same users and tokens, in the dedicated \"chef\" sync space"],
+             'scope' => 'CalMind accounts (borrowed)', 'auth' => "Delegated — no backend of its own; signs in through CalMind's API, same users and tokens, in the dedicated \"chef\" sync space"],
             ['label' => 'AcctMind',   'app' => 'AcctMind', 'url' => 'https://seancheren.com/AcctMind/',
+             'scope' => 'AcctMind accounts &middot; HTTP Basic',
+             'login' => ['kind' => 'http-basic', 'cred' => 'acctmind', 'url' => 'https://seancheren.com/AcctMind/'],
              'auth' => "AcctMind's own, separate account system, behind HTTP Basic"],
         ],
         'test.seancheren.com' => [
-            ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://test.seancheren.com/calmind/',
-             'auth' => "CalMind's own accounts, test instance — its own data, its own store"],
+            ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://test.seancheren.com/CalMind/',
+             'scope' => 'CalMind accounts (test store)', 'auth' => "CalMind's own accounts, test instance — its own data, its own store"],
             ['label' => 'AcctMind', 'app' => 'AcctMind', 'url' => 'https://test.seancheren.com/AcctMind/',
-             'auth' => "AcctMind's own accounts, test instance, behind HTTP Basic"],
+             'scope' => 'AcctMind accounts &middot; HTTP Basic', 'auth' => "AcctMind's own accounts, test instance, behind HTTP Basic"],
         ],
         'dev.seancheren.com' => [
-            ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://dev.seancheren.com/calmind/',
-             'auth' => "CalMind's own accounts, dev instance"],
+            ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://dev.seancheren.com/CalMind/',
+             'scope' => 'CalMind accounts (dev store)', 'auth' => "CalMind's own accounts, dev instance"],
         ],
     ],
     'site' => [
         'seancheren.com' => [
-            ['label' => 'Home',            'app' => 'site', 'url' => 'https://seancheren.com/',              'auth' => 'Public — no login'],
-            ['label' => 'About',           'app' => 'site', 'url' => 'https://seancheren.com/about/',        'auth' => 'Public — no login'],
-            ['label' => 'Contact',         'app' => 'site', 'url' => 'https://seancheren.com/contact/',      'auth' => 'Public — no login'],
-            ['label' => 'Projects',        'app' => 'site', 'url' => 'https://seancheren.com/projects/',     'auth' => 'Public — no login'],
-            ['label' => 'Theme picker',    'app' => 'site', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public — sets a cookie, no login'],
-            ['label' => 'Chat',            'app' => 'site', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public — deliberately no login (see chat/index.php)'],
-            ["label" => "Aki's Bookshelf", 'app' => 'site', 'url' => 'https://seancheren.com/akisbookshelf/','auth' => "Site login (lib/auth.php), then gated to the 'aki' account only"],
-            ['label' => 'Themes bench',    'app' => 'site', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Site login (lib/auth.php); no per-account gate'],
-            ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/',       'auth' => "Site login (lib/auth.php), then gated to the 'sean' account only"],
-            ['label' => "Aki's Tarot",     'app' => 'site', 'url' => 'https://seancheren.com/akitarot/',     'auth' => 'Public — no login. Deployed from the private aki-tarot repo, not from seancheren-site'],
+            ['label' => 'Home',            'app' => 'site', 'url' => 'https://seancheren.com/', 'scope' => 'public',              'auth' => 'Public — no login'],
+            ['label' => 'About',           'app' => 'site', 'scope' => 'public', 'url' => 'https://seancheren.com/about/',        'auth' => 'Public — no login'],
+            ['label' => 'Contact',         'app' => 'site', 'scope' => 'public', 'url' => 'https://seancheren.com/contact/',      'auth' => 'Public — no login'],
+            ['label' => 'Projects',        'app' => 'site', 'scope' => 'public', 'url' => 'https://seancheren.com/projects/',     'auth' => 'Public — no login'],
+            ['label' => 'Theme picker',    'app' => 'site', 'scope' => 'public &middot; sets a cookie', 'url' => 'https://seancheren.com/themepicker/',  'auth' => 'Public — sets a cookie, no login'],
+            ['label' => 'Chat',            'app' => 'site', 'scope' => 'public &middot; deliberately none', 'url' => 'https://seancheren.com/chat/',         'auth' => 'Public — deliberately no login (see chat/index.php)'],
+            ["label" => "Aki's Bookshelf", 'app' => 'site', 'scope' => 'site login &rarr; aki only', 'url' => 'https://seancheren.com/akisbookshelf/',
+             'login' => ['kind' => 'site-form', 'cred' => 'site', 'url' => 'https://seancheren.com/akisbookshelf/'],
+             'auth' => "Site login (lib/auth.php), then gated to the 'aki' account only"],
+            ['label' => 'Themes bench',    'app' => 'site', 'scope' => 'site login', 'url' => 'https://seancheren.com/akisthemes/',   'auth' => 'Site login (lib/auth.php); no per-account gate'],
+            ['label' => 'Status',          'app' => 'site', 'url' => 'https://seancheren.com/status/', 'scope' => 'site login &rarr; sean only',       'auth' => "Site login (lib/auth.php), then gated to the 'sean' account only"],
+            ['label' => "Aki's Tarot",     'app' => 'site', 'scope' => 'public', 'url' => 'https://seancheren.com/akitarot/',     'auth' => 'Public — no login. Deployed from the private aki-tarot repo, not from seancheren-site'],
         ],
         'test.seancheren.com' => [
-            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/',       'auth' => 'Public — the sandbox mirror, its own data dir'],
-            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'auth' => "Sandbox login (lib-test), then the 'sean' gate"],
+            ['label' => 'Home',   'app' => 'site', 'url' => 'https://test.seancheren.com/', 'scope' => 'public &middot; sandbox',       'auth' => 'Public — the sandbox mirror, its own data dir'],
+            ['label' => 'Status', 'app' => 'site', 'url' => 'https://test.seancheren.com/status/', 'scope' => 'sandbox login &rarr; sean only', 'auth' => "Sandbox login (lib-test), then the 'sean' gate"],
         ],
         'dev.seancheren.com' => [
-            ['label' => 'Home', 'app' => 'site', 'url' => 'https://dev.seancheren.com/', 'auth' => 'Public — the second sandbox slot'],
+            ['label' => 'Home', 'app' => 'site', 'url' => 'https://dev.seancheren.com/', 'scope' => 'public &middot; sandbox', 'auth' => 'Public — the second sandbox slot'],
         ],
     ],
 ];
@@ -270,7 +482,12 @@ if (!is_array($results)) {
     foreach ($endpoints as $group => $domains) {
         foreach ($domains as $list) {
             foreach ($list as $ep) {
-                $results[$group][$ep['url']] = check_url($ep['url'], $ep['post'] ?? null);
+                $r = check_url($ep['url'], $ep['post'] ?? null);
+                // The sign-in itself, where one is declared. Cached with the
+                // rest, so a probe account signs in once per TTL and not once
+                // per page view.
+                if (!empty($ep['login'])) { $r['login'] = check_login($ep['login']); }
+                $results[$group][$ep['url']] = $r;
             }
         }
     }
@@ -280,7 +497,7 @@ if (!is_array($results)) {
     // what the History graph draws a line per app from. Recorded only on a
     // real sweep, never on a cache hit, so the samples are spaced by the cache
     // TTL rather than by how often somebody opened the page.
-    status_sample_record($endpoints, $results);
+    status_sample_record(status_sample_row($repos, $WEB_PROBE, $endpoints, $results));
 }
 ?>
 <!doctype html>
@@ -567,10 +784,53 @@ if (!is_array($results)) {
     background: var(--surface-alt); border-bottom: 1px solid var(--line);
   }
   .endpoint-row {
-    display: grid; grid-template-columns: 1fr 110px 90px 2fr; gap: 16px;
+    display: grid; grid-template-columns: 1.4fr 80px 128px 116px 128px 1.4fr; gap: 14px;
     padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: start; font-size: 0.85rem;
   }
   .endpoint-row:last-child { border-bottom: none; }
+  .endpoint-head {
+    font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-faint); padding-top: 8px; padding-bottom: 8px;
+    background: var(--surface-alt);
+  }
+  .scope-chip {
+    display: inline-block; font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.35;
+    color: var(--ink-soft); background: var(--surface-alt);
+    border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px;
+  }
+
+  /* ---------- group + graph heads ---------- */
+  .group-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); background: var(--surface-alt); }
+  .group-head h2 { margin: 0; font-size: 1rem; font-weight: 650; }
+  .group-head p { margin: 4px 0 0; font-size: 0.82rem; color: var(--ink-soft); }
+
+  .graph-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+  .graph-head h2 { margin: 0; font-size: 0.95rem; font-weight: 650; }
+  .graph-axis {
+    display: flex; justify-content: space-between; margin-top: 4px;
+    font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-faint);
+  }
+
+  /* The repo picker: a <details>, so it needs no JS to open and cannot get
+     stuck open behind a failed script. */
+  .repo-pick { position: relative; }
+  .repo-pick > summary {
+    list-style: none; cursor: pointer; font-size: 0.8rem; color: var(--ink-soft);
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--surface-alt);
+  }
+  .repo-pick > summary::-webkit-details-marker { display: none; }
+  .repo-pick-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 210px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px; display: flex; flex-direction: column; gap: 2px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  }
+  .repo-pick-menu label {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    border-radius: 6px; font-size: 0.85rem; cursor: pointer;
+  }
+  .repo-pick-menu label:hover { background: var(--surface-alt); }
+  .repo-pick-menu .dot { width: 10px; height: 3px; border-radius: 2px; flex: none; }
   .endpoint-url { font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-faint); word-break: break-all; }
   .endpoint-auth { color: var(--ink-soft); line-height: 1.4; }
   .endpoint-ms { font-family: var(--font-mono); color: var(--ink-faint); font-size: 0.78rem; }
@@ -578,6 +838,8 @@ if (!is_array($results)) {
   @media (max-width: 640px) {
     .page { padding: 16px 18px 56px; }
     .endpoint-row { grid-template-columns: 1fr; gap: 6px; }
+    .endpoint-head { display: none; }
+    .graph-head { flex-direction: column; align-items: flex-start; }
   }
 </style>
 </head>
@@ -614,14 +876,25 @@ if (!is_array($results)) {
   <div class="tab-panel active" id="tab-current">
 
   <div class="kpis">
-    <div class="kpi"><span class="n">5 + 1</span><span class="l">repos in the suite, plus the legacy site shell</span></div>
+    <div class="kpi"><span class="n">5</span><span class="l">Mind-suite repos &middot; 2 developer &middot; 2 website</span></div>
     <div class="kpi"><span class="n">3</span><span class="l">apps syncing through a server</span></div>
     <div class="kpi"><span class="n">1</span><span class="l">app syncing local-only, via Bonjour</span></div>
     <div class="kpi"><span class="n">4 / 4</span><span class="l">apps building &amp; running on Android</span></div>
     <div class="kpi"><span class="n">3 / 3</span><span class="l">phone slots spent (free-tier cap)</span></div>
   </div>
 
+  <?php
+  // ONE TABLE PER CATEGORY, all from $repos. Sean, 2026-08-22: "group
+  // MindSuite, Developer (AgentSuite/LocalLLM), and website repos".
+  foreach ($REPO_GROUPS as $gkey => [$gname, $gdek]):
+    $rows = array_values(array_filter($repos, fn($r) => $r['group'] === $gkey));
+    if (!$rows) { continue; }
+  ?>
   <div class="table-card">
+    <div class="group-head">
+      <h2><?= e($gname) ?></h2>
+      <p><?= e($gdek) ?></p>
+    </div>
     <div class="table-scroll">
       <table>
         <colgroup>
@@ -635,80 +908,30 @@ if (!is_array($results)) {
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td><span class="repo-name">CalMind</span><span class="repo-tag">origin app</span></td>
-            <td><span class="chip live">seancheren.com/calmind</span></td>
-            <td class="prose"><code>seancheren.com/calmind/api</code> — every client syncs through it. Also on <code>test.</code> and <code>dev.</code></td>
-            <td><span class="chip live">Tauri desktop</span></td>
-            <td><span class="chip live">CI build</span></td>
-            <td><span class="chip live">on phone</span><span class="cell-note">1 of 3 device slots</span></td>
-            <td><span class="chip live">CalMindWatch</span><span class="cell-note">installs to paired watch</span></td>
-            <td><span class="chip live">installs &amp; runs</span></td>
-          </tr>
-          <tr>
-            <td><span class="repo-name">ChefMind</span><span class="repo-tag">split from CalMind</span></td>
-            <td><span class="chip live">seancheren.com/ChefMind</span></td>
-            <td class="prose"><code>seancheren.com/calmind/api</code>, <code>chef</code> space. No backend of its own.</td>
-            <td><span class="chip live">installed today</span><span class="cell-note">/Applications, verified launching</span></td>
-            <td><span class="chip live">CI build</span></td>
-            <td><span class="chip live">on phone</span><span class="cell-note">1 of 3 — reinstalled 08-22</span></td>
-            <td><span class="chip none">&mdash;</span><span class="cell-note">no watch target</span></td>
-            <td><span class="chip live">installs &amp; runs</span></td>
-          </tr>
-          <tr>
-            <td><span class="repo-name">AcctMind</span><span class="repo-tag">separate build</span></td>
-            <td><span class="chip live">seancheren.com/AcctMind</span></td>
-            <td class="prose"><code>seancheren.com/AcctMind</code>, and <code>test.seancheren.com/AcctMind</code>.</td>
-            <td><span class="chip live">installed</span><span class="cell-note">/Applications, verified launching</span></td>
-            <td><span class="chip live">CI build</span></td>
-            <td><span class="chip live">on phone</span><span class="cell-note">1 of 3 slots</span></td>
-            <td><span class="chip none">&mdash;</span><span class="cell-note">no watch target</span></td>
-            <td><span class="chip live">installs &amp; runs</span></td>
-          </tr>
-          <tr>
-            <td><span class="repo-name">MyCalMind</span><span class="repo-tag">extracted, renamed</span></td>
-            <td><span class="chip none">none</span></td>
-            <td class="prose">Bonjour over the LAN, <code>_calmind-local._tcp</code>. No internet, no backup — the device is the only copy.</td>
-            <td><span class="chip live">installed</span><span class="cell-note">real Mac Catalyst app, verified running &mdash; one fix (ReactNativeDependencies bundle repair) not yet durable across a fresh prebuild</span></td>
-            <td><span class="chip none">&mdash;</span><span class="cell-note">no Tauri shell</span></td>
-            <td><span class="chip done">build-only</span><span class="cell-note">deliberate — protects the phone's 3-app cap</span></td>
-            <td><span class="chip done">builds</span><span class="cell-note">CalMindWatch product — not installed to a watch</span></td>
-            <td><span class="chip live">installs &amp; runs</span></td>
-          </tr>
-          <tr>
-            <td><span class="repo-name">CoreMind</span><span class="repo-tag">shared tooling</span></td>
-            <td><span class="chip none">n/a</span></td>
-            <td class="prose">None. Distributes source into the other four repos; ships no app, holds no data.</td>
-            <td><span class="chip none">n/a</span></td><td><span class="chip none">n/a</span></td><td><span class="chip none">n/a</span></td>
-            <td><span class="chip none">n/a</span></td><td><span class="chip none">n/a</span></td>
-          </tr>
-          <tr class="outside">
-            <td><span class="repo-name">AgentSuite</span><span class="repo-tag">not one of the five</span></td>
-            <td><span class="chip none">none</span></td>
-            <td class="prose">None. Conventions and skills for AI agents across projects — text, not code.</td>
-            <td colspan="5" class="prose">No app and no build. A project uses it by importing its <code>AGENTS.md</code> or copying a skill down.</td>
-          </tr>
-          <tr class="outside">
-            <td><span class="repo-name">LLMLOCAL</span><span class="repo-tag">not one of the five</span></td>
-            <td><span class="chip none">none</span></td>
-            <td class="prose">None. Local-model experiments, run on this machine.</td>
-            <td colspan="5" class="prose">Python, no deploy and no release lane. Last touched 2026-03-20.</td>
-          </tr>
-          <tr class="outside">
-            <td><span class="repo-name">aki-tarot</span><span class="repo-tag">not one of the five</span></td>
-            <td><span class="chip legacy">seancheren.com/akitarot</span></td>
-            <td class="prose"><code>seancheren.com/akitarot</code> — live, and deployed from its own private repo rather than from seancheren-site.</td>
-            <td colspan="5" class="prose">Aki's, not the suite's. Listed because it is SERVED from this host and was missing from these checks entirely until 2026-08-22.</td>
-          </tr>
-          <tr class="outside">
-            <td><span class="repo-name">seancheren-site</span><span class="repo-tag">not one of the five</span></td>
-            <td><span class="chip legacy">hosting shell</span></td>
-            <td class="prose"><code>seancheren.com</code> on NearlyFreeSpeech — the account every Mind-suite app deploys a subpath into. Its own pages are Chat and Aki's Bookshelf.</td>
-            <td colspan="5" class="prose">Has its own separate, legacy native iOS/watchOS/Android apps (SwiftUI, local-only) — entirely outside this suite's tooling and this table's scope.</td>
-          </tr>
+          <?php foreach ($rows as $r): ?>
+            <tr<?= $gkey === 'mindsuite' ? '' : ' class="outside"' ?>>
+              <td>
+                <span class="repo-name"><?= e($r['name']) ?></span>
+                <span class="repo-tag"><?= e($r['tag']) ?></span>
+              </td>
+              <?php // Web leads, then the prose, then the five device columns —
+                    // the same order the matrix stores them in. ?>
+              <?php $cell = $r['plat']['web']; ?>
+              <td><span class="chip <?= $cell[0] === null ? 'none' : severity_chip_class((int) $cell[0]) ?>"><?= $cell[1] ?></span></td>
+              <td class="prose"><?= $r['sync'] ?></td>
+              <?php foreach (['macos', 'windows', 'ios', 'watchos', 'android'] as $plat):
+                $c = $r['plat'][$plat] ?? [null, '&mdash;']; ?>
+                <td>
+                  <span class="chip <?= $c[0] === null ? 'none' : severity_chip_class((int) $c[0]) ?>"><?= $c[1] ?></span>
+                  <?php if (!empty($c[2])): ?><span class="cell-note"><?= $c[2] ?></span><?php endif; ?>
+                </td>
+              <?php endforeach; ?>
+            </tr>
+          <?php endforeach; ?>
         </tbody>
       </table>
     </div>
+    <?php if ($gkey === 'mindsuite'): ?>
     <div class="legend">
       <div class="legend-item"><span class="swatch live"></span> live &amp; verified</div>
       <div class="legend-item"><span class="swatch done"></span> working as intended, deliberately not installed</div>
@@ -716,8 +939,11 @@ if (!is_array($results)) {
       <div class="legend-item"><span class="swatch crit"></span> needs your attention</div>
       <div class="legend-item"><span class="swatch running"></span> a dtp/tdtp is running right now</div>
       <div class="legend-item"><span class="swatch none"></span> none, or not applicable</div>
-      <div class="legend-item"><span class="swatch legacy"></span> outside the five-repo suite</div>
     </div>
+    <?php endif; ?>
+  </div>
+  <?php endforeach; ?>
+
   </div>
 
 
@@ -727,66 +953,150 @@ if (!is_array($results)) {
   <div class="tab-panel" id="tab-history">
 
   <?php
-  // THE GRAPH IS THE PINGS, not the releases. Sean, 2026-08-22: "the linegraph
-  // should have a line for each app and its status from the current tab during
-  // each ping". One polyline per app, sampled every time the reachability cache
-  // expires and a real sweep runs — so the x axis is time as actually observed,
-  // and a dip is a moment something answered badly rather than a release.
+  // ONE PLOT PER CATEGORY, one line per repo-and-platform, x = pings.
+  // Sean, 2026-08-22: "make a line plot for each category on history where
+  // each line is a repo's web/server status, macos status, windows status,
+  // ios status, watchos status, and android status ... make a drop down check
+  // box picker for every graph to choose which repos are shown".
+  //
+  // Only WEB is measured per ping; the device rows are recorded facts, so
+  // their lines are flat until a build changes them. That is the honest
+  // rendering — a flat line is the claim "nothing moved", and it is the one
+  // this page can actually make.
   $samples = status_samples();
-  $APP_COLOR = ['CalMind' => 'var(--live)', 'ChefMind' => 'var(--gold, #f0b429)',
-                'AcctMind' => 'var(--accent-soft-ink)', 'site' => 'var(--ink-soft)'];
+  // A colour per repo, and a dash per platform: two keys, so a line says both
+  // which repo and which platform without a legend entry per combination.
+  $REPO_COLOR = ['CalMind' => '#5fb6ac', 'ChefMind' => '#f0b429', 'AcctMind' => '#8fa3e0',
+                 'MyCalMind' => '#d98cc0', 'CoreMind' => '#9c978d',
+                 'AgentSuite' => '#5fb6ac', 'LLMLOCAL' => '#f0b429',
+                 'seancheren-site' => '#5fb6ac', 'aki-tarot' => '#f0b429'];
+  $PLAT_DASH = ['web' => '', 'macos' => '6 3', 'windows' => '2 3',
+                'ios' => '10 4', 'watchos' => '1 4', 'android' => '6 3 1 3'];
   ?>
   <?php if (count($samples) < 2): ?>
     <div class="graph-card">
       <div class="graph-empty">
-        Not enough pings yet — this graph needs at least two, and one is
-        recorded each time the <?= $cacheTtl ?>s reachability cache expires and a
-        real sweep runs. Leave this page open for a couple of minutes.
+        Not enough pings yet — this needs at least two, and one is recorded
+        each time the <?= $cacheTtl ?>s reachability cache expires and a real
+        sweep runs. Leave this page open for a couple of minutes.
       </div>
     </div>
   <?php else: ?>
-    <div class="graph-card">
-      <svg viewBox="0 0 640 170" style="width:100%;height:200px" preserveAspectRatio="none">
-        <?php
-        $n = count($samples);
-        $w = 640; $h = 170; $pad = 18;
-        $stepX = $n > 1 ? ($w - 2 * $pad) / ($n - 1) : 0;
-        // Severity 0 at the top, 3 at the bottom. Each app's line is nudged a
-        // hair off the others so four healthy apps do not draw as one line —
-        // without it "everything is fine" and "only CalMind reported" look the
-        // same, which is the one thing this graph must never do.
-        $lane = 0;
-        foreach (sample_apps() as $app):
-            $pts = [];
-            foreach ($samples as $i => $row) {
-                if (!isset($row['s'][$app])) { continue; }
-                $sev = (int) $row['s'][$app];
-                $x = $pad + $i * $stepX;
-                $y = $pad + ($sev / 3) * ($h - 2 * $pad) + ($lane - 1.5) * 3;
-                $pts[] = round($x, 1) . ',' . round($y, 1);
-            }
-            $lane++;
-            if (count($pts) < 2) { continue; }
-        ?>
-          <polyline points="<?= implode(' ', $pts) ?>" fill="none"
-                    stroke="<?= $APP_COLOR[$app] ?? 'var(--ink-soft)' ?>"
-                    stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
-        <?php endforeach; ?>
-      </svg>
-      <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:0.72rem;color:var(--ink-faint);margin-top:4px">
-        <span><?= e(date('H:i', $samples[0]['ts'])) ?></span>
-        <span><?= $n ?> pings &middot; top = all up, bottom = something down</span>
-        <span><?= e(date('H:i', $samples[$n - 1]['ts'])) ?></span>
-      </div>
-      <div class="legend" style="border-top:none;background:none;padding:10px 0 0">
-        <?php foreach (sample_apps() as $app): ?>
-          <div class="legend-item">
-            <span class="swatch" style="background:<?= $APP_COLOR[$app] ?? 'var(--ink-soft)' ?>;border-radius:2px;width:14px;height:3px"></span>
-            <?= e($app === 'site' ? 'the site' : $app) ?>
+    <?php
+    $n = count($samples);
+    $firstTs = $samples[0]['ts']; $lastTs = $samples[$n - 1]['ts'];
+    foreach ($REPO_GROUPS as $gkey => [$gname, $gdek]):
+      $rows = array_values(array_filter($repos, fn($r) => $r['group'] === $gkey));
+      // Only repos that actually have a series in the samples; a repo with
+      // nothing to plot would be a checkbox that does nothing.
+      $plotted = [];
+      foreach ($rows as $r) {
+          foreach (array_keys($r['plat']) as $plat) {
+              if (isset($samples[0]['s'][$r['name'] . '.' . $plat])) { $plotted[$r['name']] = true; break; }
+          }
+      }
+      $gid = 'g' . $gkey;
+      // A category with nothing measurable says so. Vanishing would read as a
+      // rendering bug, and "these repos ship nothing to watch" is a fact worth
+      // stating once rather than a gap to be puzzled over.
+      if (!$plotted): ?>
+        <div class="graph-card">
+          <div class="graph-head"><h2><?= e($gname) ?></h2></div>
+          <div class="graph-empty">
+            Nothing to plot. These repos ship no server and no app — there is
+            no endpoint to ping and no build to report, which is the whole
+            point of the category.
           </div>
-        <?php endforeach; ?>
+        </div>
+      <?php continue; endif; ?>
+      <?php ?>
+      <div class="graph-card">
+        <div class="graph-head">
+          <h2><?= e($gname) ?></h2>
+          <details class="repo-pick" data-graph="<?= $gid ?>">
+            <summary>Repos <span class="caret">&#9662;</span></summary>
+            <div class="repo-pick-menu">
+              <?php foreach (array_keys($plotted) as $rn): ?>
+                <label>
+                  <input type="checkbox" checked data-graph="<?= $gid ?>" value="<?= e($rn) ?>">
+                  <span class="dot" style="background:<?= $REPO_COLOR[$rn] ?? '#9c978d' ?>"></span>
+                  <?= e($rn) ?>
+                </label>
+              <?php endforeach; ?>
+            </div>
+          </details>
+        </div>
+        <svg viewBox="0 0 640 170" style="width:100%;height:210px" preserveAspectRatio="none">
+          <?php
+          // Severity 0 at the top, 3 at the bottom, with each series nudged a
+          // hair off the others: without it every healthy line draws on top of
+          // every other, and "all fine" looks identical to "only one reported".
+          // The offset is by PLATFORM, not by a running counter. Six fixed
+          // lanes means a repo's macOS line sits at the same height as every
+          // other repo's macOS line, so the eye reads rows; a counter spread
+          // 22 series over the same 15px and drew a hairy band.
+          $platLane = array_flip(array_keys($PLATFORMS));
+          foreach ($rows as $r):
+            foreach ($PLATFORMS as $plat => $platName):
+              $key = $r['name'] . '.' . $plat;
+              $pts = [];
+              foreach ($samples as $i => $row) {
+                  if (!isset($row['s'][$key])) { continue; }
+                  $x = 18 + $i * (($n > 1) ? (640 - 36) / ($n - 1) : 0);
+                  $y = 18 + ((int) $row['s'][$key] / 3) * (170 - 36) + ($platLane[$plat] - 2.5) * 5;
+                  $pts[] = round($x, 1) . ',' . round($y, 1);
+              }
+              if (count($pts) < 2) { continue; }
+          ?>
+            <polyline class="series" data-graph="<?= $gid ?>" data-repo="<?= e($r['name']) ?>"
+                      points="<?= implode(' ', $pts) ?>" fill="none"
+                      stroke="<?= $REPO_COLOR[$r['name']] ?? '#9c978d' ?>"
+                      stroke-width="2" stroke-linecap="round"
+                      <?php // Without this the viewBox stretch (preserveAspectRatio=none)
+                            // scales the dash pattern horizontally too, and six distinct
+                            // platform dashes all smear into the same fuzz. ?>
+                      vector-effect="non-scaling-stroke"
+                      <?= $PLAT_DASH[$plat] !== '' ? 'stroke-dasharray="' . $PLAT_DASH[$plat] . '"' : '' ?>>
+              <title><?= e($r['name'] . ' — ' . $platName) ?></title>
+            </polyline>
+          <?php endforeach; endforeach; ?>
+        </svg>
+        <div class="graph-axis">
+          <span><?= e(date('H:i', $firstTs)) ?></span>
+          <span><?= $n ?> pings &middot; top = fine, bottom = needs attention</span>
+          <span><?= e(date('H:i', $lastTs)) ?></span>
+        </div>
+        <div class="legend" style="border-top:none;background:none;padding:10px 0 0">
+          <?php foreach ($PLATFORMS as $plat => $platName): ?>
+            <div class="legend-item">
+              <svg width="26" height="6" style="flex:none"><line x1="0" y1="3" x2="26" y2="3"
+                stroke="var(--ink-soft)" stroke-width="2"
+                <?= $PLAT_DASH[$plat] !== '' ? 'stroke-dasharray="' . $PLAT_DASH[$plat] . '"' : '' ?> /></svg>
+              <?= e($platName) ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
       </div>
-    </div>
+    <?php endforeach; ?>
+    <script>
+      // The pickers. A repo's checkbox hides every line belonging to it, in
+      // its own graph only — the same repo can appear in two categories and
+      // unticking it in one must not blank the other.
+      document.querySelectorAll('.repo-pick input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          document.querySelectorAll(
+            `polyline.series[data-graph="${cb.dataset.graph}"][data-repo="${CSS.escape(cb.value)}"]`
+          ).forEach(l => { l.style.display = cb.checked ? '' : 'none'; });
+        });
+      });
+      // Tapping outside a picker closes it — a <details> left open covers the
+      // graph it belongs to.
+      document.addEventListener('click', (e) => {
+        document.querySelectorAll('details.repo-pick[open]').forEach(d => {
+          if (!d.contains(e.target)) { d.removeAttribute('open'); }
+        });
+      });
+    </script>
   <?php endif; ?>
 
   <?php if (empty($history)): ?>
@@ -873,12 +1183,30 @@ if (!is_array($results)) {
               // fact, and reading it as several unrelated rows is how it gets
               // mistaken for a coincidence. ?>
         <h3 class="domain-head"><?= e($domain) ?><?= $domain === 'seancheren.com' ? ' <span class="domain-note">production</span>' : ' <span class="domain-note">sandbox</span>' ?></h3>
+        <div class="endpoint-row endpoint-head">
+          <div>Endpoint</div><div>Status</div><div>Sign-in</div><div>Response</div><div>Auth scope</div><div>How that auth works</div>
+        </div>
         <?php foreach ($list as $ep): $r = $results[$key][$ep['url']] ?? ['ok' => false, 'status' => 0, 'ms' => 0]; ?>
           <div class="endpoint-row">
             <div><?= e($ep['label']) ?><div class="endpoint-url"><?= e($ep['url']) ?></div></div>
-            <div><span class="chip <?= !$r['ok'] ? 'crit' : (!empty($r['gated']) ? 'done' : 'live') ?>"><?=
-              !$r['ok'] ? 'down' : (!empty($r['gated']) ? 'up &middot; asks to sign in' : 'up') ?></span></div>
+            <?php // STATUS and AUTH are separate columns now — Sean, 2026-08-22:
+                  // "status should be separate from auth on live status". They
+                  // answer different questions and a row that ran them together
+                  // read as though the auth were the reason for the status. ?>
+            <?php // The URL answering, and nothing more. A 401 is UP: the server
+                  // replied. Whether anybody can get in is the next column's
+                  // question, and conflating the two was the old label's whole
+                  // problem. ?>
+            <div><span class="chip <?= $r['ok'] ? 'live' : 'crit' ?>"><?= $r['ok'] ? 'up' : 'down' ?></span></div>
+            <div><?php
+              $lg = $r['login'] ?? null;
+              if ($lg === null) { echo '<span class="scope-chip">n/a</span>'; }
+              elseif ($lg['state'] === 'ok')      { echo '<span class="chip live" title="' . e($lg['why']) . '">sign-in works</span>'; }
+              elseif ($lg['state'] === 'failed')  { echo '<span class="chip crit" title="' . e($lg['why']) . '">sign-in BROKEN</span>'; }
+              else { echo '<span class="chip partial" title="' . e($lg['why']) . '">not probed</span>'; }
+            ?></div>
             <div class="endpoint-ms"><?= $r['status'] ? $r['status'] . ' &middot; ' . $r['ms'] . 'ms' : '&mdash;' ?></div>
+            <div><span class="scope-chip"><?= $ep['scope'] ?? 'unknown' ?></span></div>
             <div class="endpoint-auth"><?= e($ep['auth']) ?></div>
           </div>
         <?php endforeach; ?>
@@ -887,9 +1215,11 @@ if (!is_array($results)) {
   <?php endforeach; ?>
 
   <div class="legend">
-    <div class="legend-item"><span class="swatch live"></span> <strong>up</strong> — answered 2xx or 3xx</div>
-    <div class="legend-item"><span class="swatch done"></span> <strong>up &middot; asks to sign in</strong> — answered 401/403, so the server is running and wants credentials this page deliberately does not carry. Not an outage.</div>
+    <div class="legend-item"><span class="swatch live"></span> <strong>up</strong> — the URL answered. A 401 counts: the server replied.</div>
     <div class="legend-item"><span class="swatch crit"></span> <strong>down</strong> — no answer, or an error</div>
+    <div class="legend-item"><span class="swatch live"></span> <strong>sign-in works</strong> — a probe account really signed in just now</div>
+    <div class="legend-item"><span class="swatch crit"></span> <strong>sign-in BROKEN</strong> — the URL is up and nobody can get in</div>
+    <div class="legend-item"><span class="swatch partial"></span> <strong>not probed</strong> — no probe credentials in <code>lib/config.php</code>; hover for which key is missing</div>
   </div>
 
   </div>

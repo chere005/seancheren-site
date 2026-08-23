@@ -37,10 +37,15 @@ function hit_log_path(): string
     if (is_dir($shared) || @mkdir($shared, 0770, true)) {
         return $shared . '/hits.log';
     }
-    // Local dev: beside the repo's own data dir, which is gitignored.
-    $local = dirname(__DIR__) . '/data';
-    if (!is_dir($local)) { @mkdir($local, 0700, true); }
-    return $local . '/hits.log';
+    // Local dev, and the test run. app_config()'s data_dir honours
+    // SUITE_DATA_DIR, which is what the harness points at a scratch directory
+    // — without going through it, a test run would write hits into the repo's
+    // own data/, and "a test run cannot touch data/" is a rule this repo
+    // states out loud.
+    $dir = function_exists('app_config') ? (string) (app_config()['data_dir'] ?? '') : '';
+    if ($dir === '') { $dir = dirname(__DIR__) . '/data'; }
+    if (!is_dir($dir)) { @mkdir($dir, 0700, true); }
+    return rtrim($dir, '/') . '/hits.log';
 }
 
 const HIT_LOG_MAX = 4 * 1024 * 1024;   // one rotation, so it cannot grow forever

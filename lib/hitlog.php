@@ -303,7 +303,7 @@ function hit_windows(): array
  * 4 MB and the rotated copy is dropped on the next rotation, so a busy month
  * really can leave the year column reporting on a fortnight. The page says so.
  */
-function hit_usage(): array
+function hit_usage(array $roster = []): array
 {
     $wins = hit_windows();
     $now  = time();
@@ -333,6 +333,22 @@ function hit_usage(): array
             $b = (int) floor(($r['ts'] - ($now - $w['secs'])) / $w['bucket']);
             $series[$wk][$key][$b] = ($series[$wk][$key][$b] ?? 0) + 1;
         }
+    }
+
+    /**
+     * EVERY KNOWN ACCOUNT, not only the ones that showed up — Sean,
+     * 2026-08-23: "why can't i see a full username list in usage?" Because
+     * the table was built from the log, and an account that has never made a
+     * request leaves no line in it. Silence and absence looked identical.
+     * The roster fills in the rest at zero, so the list is the ACCOUNTS and
+     * the numbers are the traffic.
+     */
+    foreach ($roster as $who) {
+        $lane = $who === 'sean' ? 'sean' : 'other';
+        $key  = $lane . "\0" . $who;
+        if (isset($people[$key])) { continue; }
+        $people[$key] = ['name' => $who, 'lane' => $lane, 'last' => 0,
+                         'counts' => array_fill_keys(array_keys($wins), 0)];
     }
 
     // Busiest first, on the shortest window that distinguishes them — an

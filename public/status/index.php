@@ -547,7 +547,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
      gated row has a sign-in and a scope, a public one has neither and used to
      carry two columns of "n/a" to prove it. */
   .endpoint-row {
-    display: grid; grid-template-columns: 148px minmax(0, 1.5fr) 74px 100px 112px 118px 96px; gap: 13px;
+    display: grid; grid-template-columns: 116px minmax(0, 1fr) 110px 156px 98px 130px 96px; gap: 12px;
     padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: start; font-size: 0.85rem;
   }
   /* The public rows keep the SAME tracks and simply leave two of them empty,
@@ -578,7 +578,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .recheck:hover { border-color: var(--accent); }
 
   .scope-chip {
-    display: inline-block; font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.35;
+    display: inline-block; white-space: nowrap; font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.35;
     color: var(--ink-soft); background: var(--surface-alt);
     border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px;
   }
@@ -683,7 +683,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .scope-gate { display: inline-block; font-family: var(--font-mono); font-size: 0.72rem; color: var(--partial); }
   /* When the cell beside it was last actually asked. Its own line so a narrow
      column never pushes the chip out of shape. */
-  .checked-at { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 0.68rem; color: var(--ink-faint); }
+  /* Beside the chip, not under it. As a block it dropped to a second line and
+     left every status row two lines tall for a five-character time; the two
+     columns that carry one are widened to hold "up 9:48 am" on one. */
+  .checked-at { margin-left: 7px; font-family: var(--font-mono); font-size: 0.68rem;
+                color: var(--ink-faint); white-space: nowrap; }
+  .endpoint-row > div:has(> .checked-at) { white-space: nowrap; }
   .endpoint-auth { color: var(--ink-soft); line-height: 1.4; }
   .endpoint-ms { font-family: var(--font-mono); color: var(--ink-faint); font-size: 0.78rem; }
 
@@ -1480,7 +1485,10 @@ function cell_chip(?int $sev, string $repo, array $running): string
    * app and site on the account rather than whichever one had logging wired
    * up. The lane split and the bucketing live in lib/hitlog.php.
    */
-  $usage = hit_usage();
+  // The roster is the site's own account store — config users plus everyone
+  // who signed up. CalMind's accounts live behind a key this page cannot
+  // read, so its users appear here only once they have actually visited.
+  $usage = hit_usage(array_keys(app_users(app_config())));
   $uw = $usage['windows'];
   $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'claudio' => 'Claudio', 'test' => 'Tests', 'dev' => 'Dev'];
   $laneDek  = [
@@ -1534,7 +1542,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
                 <?php foreach (array_keys($uw) as $wk): ?>
                   <td class="num<?= $p['counts'][$wk] ? '' : ' zero' ?>"><?= number_format($p['counts'][$wk]) ?></td>
                 <?php endforeach; ?>
-                <td class="num soft"><?= e(ctFull($p['last'])) ?></td>
+                <?php // An account with no traffic has no last-seen — a
+                      // formatted epoch-zero would read as 1969. ?>
+                <td class="num soft"><?= $p['last'] ? e(ctFull($p['last'])) : '&mdash;' ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>

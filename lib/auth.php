@@ -522,17 +522,19 @@ function signup_clean_user(string $u): string
 }
 
 /**
- * Post the code out. Sending is turned off for now — nothing leaves the server and
- * the code is always SIGNUP_CODE, so sign-up can be used while the mailbox is being
- * sorted out. Put the two lines below back to start emailing real codes again, and
- * take the fixed code out of signup_handle() at the same time.
+ * Post the code out. The call is real; the stub is mail_send() itself
+ * (lib/mail.php), which logs "would have emailed …" and returns false — the
+ * one place mail is switched off since 2026-08-23, instead of a second layer
+ * here. That false is deliberately not fatal: the code is always SIGNUP_CODE,
+ * so sign-up keeps working while the mailbox is being sorted out. When mail
+ * goes live, return mail_send()'s verdict again and take the fixed code out
+ * of signup_handle() at the same time.
  */
 function signup_send_code(array $cfg, string $email, string $code): bool
 {
-    // $body = "Your verification code is $code\n\n"
-    //       . "It's good for fifteen minutes. If you didn't ask for an account, ignore this.\n";
-    // return mail_send($cfg, $email, 'Your verification code', $body);
-    mail_log($cfg, "would have emailed $email the code $code");
+    $body = "Your verification code is $code\n\n"
+          . "It's good for fifteen minutes. If you didn't ask for an account, ignore this.\n";
+    mail_send($cfg, $email, 'Your verification code', $body);
     return true;
 }
 

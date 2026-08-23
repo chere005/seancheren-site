@@ -4,6 +4,11 @@
  *
  *   php tools/mailtest.php you@example.com
  *
+ * DISARMED while mail_send() is stubbed (lib/mail.php): the stub logs
+ * "would have emailed …" and returns false, so this prints FAILED without
+ * sending anything. It comes back to life the moment the real body is
+ * uncommented — nothing here needs to change.
+ *
  * Prints what happened; on failure the reason is also appended to data/mail.log.
  * Not under public/, so it is never reachable over the web.
  */

@@ -38,6 +38,7 @@ return [
     // 'session_name' => 'SCSESS',
 
     // --- Outgoing mail (the sign-up verification code) ---
+    // The smtp_* keys are read by nothing while mail_send() is stubbed — see lib/mail.php.
     // Without smtp_host the code goes out through PHP's mail(), which a shared host
     // sends unauthenticated and spam filters usually discard. Name a mailbox here and
     // it's sent over an authenticated TLS session instead.

@@ -43,6 +43,12 @@ $GLOBALS['STATUS_FORCE_LOGINS'] = in_array('--logins', $argv, true);     // the 
 
 require_once $lib . '/statuscheck.php';   // sweeps, probes, records the sample
 
+// The geo lookup rides HERE and nowhere else. It talks to a third party, so it
+// belongs on the background clock the sweep already runs on rather than on the
+// render path of any page — see lib/geoip.php's header for what is sent.
+require_once $lib . '/geoip.php';
+$geoN = geo_resolve_new();
+
 // One line out, so a scheduled task's mail (or a dtp's log) says what happened
 // rather than nothing at all.
 $down = 0; $total = 0;
@@ -50,5 +56,6 @@ foreach ($results as $g => $rows) {
     if (!is_array($rows) || in_array($g, ['scopes', 'checked_at', 'logins_checked_at'], true)) { continue; }
     foreach ($rows as $r) { if (is_array($r)) { $total++; if (empty($r['ok'])) { $down++; } } }
 }
-printf("%s  %d/%d up%s\n", date('Y-m-d g:i:s a T'), $total - $down, $total,
-       $GLOBALS['STATUS_FORCE_LOGINS'] ? '  (sign-ins probed)' : '');
+printf("%s  %d/%d up%s%s\n", date('Y-m-d g:i:s a T'), $total - $down, $total,
+       $GLOBALS['STATUS_FORCE_LOGINS'] ? '  (sign-ins probed)' : '',
+       $geoN ? "  (located $geoN new address" . ($geoN === 1 ? '' : 'es') . ')' : '');

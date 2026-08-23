@@ -144,6 +144,7 @@ require_once $__libDir . '/statuscheck.php';
 // The hit log is written by lib/hitlog.php, which every page on this host
 // inherits — see that file's header for why it is separate from usage.log.
 require_once $__libDir . '/hitlog.php';
+require_once $__libDir . '/geoip.php';   // geo_for() reads the cache; the sweep fills it
 $hitWindows = ['the last hour' => 3600, 'the last 12 hours' => 12 * 3600, 'the last 3 days' => 3 * 86400];
 $hits = hit_counts($hitWindows);
 // Computed BEFORE the header, because the app picker up there is built from
@@ -441,7 +442,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
      and pushed "/Applications/CalMind.app" into its neighbour — a date split
      after the comma reads as two facts. Every track below holds its longest
      real content, and .cell-note keeps each line whole. */
-  table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1420px; }
+  table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+  /* The 1420px floor belongs to the platform MATRIX, which is genuinely wide
+     and scrolls. It was on every table, so the Usage table — seven narrow
+     columns that fit twice over — was forced into a horizontal scrollbar for
+     space it did not want. */
+  .table-card .table-scroll > table:not(.usage-table) { min-width: 1420px; }
 
   col.repo { width: 168px; }
   col.web  { width: 210px; }
@@ -650,8 +656,30 @@ function cell_chip(?int $sev, string $repo, array $running): string
      so it has to be spelled out per chart rather than fixed in a legend. */
   /* ---------- usage tab ---------- */
 
-  .usage-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  .usage-table th, .usage-table td { padding: 11px 18px; border-bottom: 1px solid var(--line); text-align: left; }
+  /* TIGHT. Eight columns at 18px of side padding each threw the numbers to
+     the far edge of a wide screen with nothing between them — the table is
+     read across a row, so the row has to be readable at a glance. */
+  .usage-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
+  .usage-table th, .usage-table td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+  .usage-table th:first-child, .usage-table td:first-child { padding-left: 18px; }
+  .usage-table th:last-child, .usage-table td:last-child { padding-right: 18px; }
+  .usage-table col.who  { width: 150px; }
+  .usage-table col.addr { width: 128px; }
+  .usage-table col.loc  { width: auto; }
+  .usage-table col.n    { width: 68px; }
+  .usage-table col.seen { width: 128px; }
+  .usage-table .mono { font-family: var(--font-mono); font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .usage-table .unloc { opacity: 0.55; }
+
+  /* The anon group: one summary row, its members hidden until asked for. */
+  .anon-toggle {
+    display: inline-flex; align-items: center; gap: 8px; font: inherit;
+    background: none; border: 0; color: inherit; cursor: pointer; padding: 0;
+  }
+  .anon-toggle .caret { display: inline-block; transition: transform 0.12s; color: var(--ink-faint); }
+  .anon-toggle[aria-expanded="true"] .caret { transform: rotate(90deg); }
+  .anon-summary td { background: var(--surface-alt); }
+  .anon-row td:first-child { padding-left: 34px; }
   .usage-table tr:last-child td { border-bottom: none; }
   .usage-table thead th {
     font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.08em;
@@ -1634,16 +1662,61 @@ function cell_chip(?int $sev, string $repo, array $running): string
       <?php else: ?>
       <div class="table-scroll">
         <table class="usage-table">
+          <colgroup>
+            <col class="who"><col class="addr"><col class="loc">
+            <?php foreach ($uw as $w): ?><col class="n"><?php endforeach; ?>
+            <col class="seen">
+          </colgroup>
           <thead>
             <tr>
-              <th>Account</th>
-              <?php foreach ($uw as $w): ?><th class="num"><?= e($w['label']) ?></th><?php endforeach; ?>
-              <th class="num">Last seen</th>
+              <th data-sort-col="0">Account</th>
+              <th data-sort-col="1">Address</th>
+              <th data-sort-col="2">Location</th>
+              <?php // $uw is keyed by window NAME ('hour','12h'…), so the column
+                    // index has to be counted rather than taken from the key. ?>
+              <?php $ci = 3; foreach ($uw as $w): ?><th class="num" data-sort-col="<?= $ci++ ?>"><?= e($w['label']) ?></th><?php endforeach; ?>
+              <th class="num" data-sort-col="<?= $ci ?>">Last seen</th>
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($rows as $rk => $p): $anon = strncmp($p['name'], 'anon', 4) === 0; ?>
-              <tr data-key="<?= e($rk) ?>">
+            <?php
+            /**
+             * ANONYMOUS COLLAPSES TO ONE ROW — Sean, 2026-08-23: "make the
+             * anons grouped so i can collapse them into a summary row". Every
+             * unrecognised address is its own person, so a busy day turns the
+             * table into a wall of anon-N and buries the named accounts it
+             * exists to show. They sort to the bottom, behind one summary row
+             * that carries their totals; the summary is the default view and
+             * the detail is one click away.
+             */
+            $anonRows = array_filter($rows, fn($p) => strncmp($p['name'], 'anon', 4) === 0);
+            $namedRows = array_filter($rows, fn($p) => strncmp($p['name'], 'anon', 4) !== 0);
+            $anonTot = array_fill_keys(array_keys($uw), 0);
+            $anonLast = 0;
+            foreach ($anonRows as $p) {
+                foreach (array_keys($uw) as $wk) { $anonTot[$wk] += $p['counts'][$wk]; }
+                $anonLast = max($anonLast, $p['last']);
+            }
+            ?>
+            <?php if ($anonRows): ?>
+              <tr class="anon-summary" data-anon-group="<?= e($lk) ?>">
+                <td>
+                  <button type="button" class="anon-toggle" aria-expanded="false">
+                    <span class="caret">&#9656;</span>
+                    <span class="usage-dot out"></span>
+                    <span class="repo-name"><?= count($anonRows) ?> anonymous</span>
+                  </button>
+                </td>
+                <td class="mono soft"><?= count($anonRows) ?> address<?= count($anonRows) === 1 ? '' : 'es' ?></td>
+                <td class="mono soft">&mdash;</td>
+                <?php foreach (array_keys($uw) as $wk): ?>
+                  <td class="num<?= $anonTot[$wk] ? '' : ' zero' ?>" data-anon-win="<?= e($wk) ?>"><?= number_format($anonTot[$wk]) ?></td>
+                <?php endforeach; ?>
+                <td class="num soft"><?= $anonLast ? e(ctFull($anonLast)) : '&mdash;' ?></td>
+              </tr>
+            <?php endif; ?>
+            <?php foreach (array_merge($namedRows, $anonRows) as $rk => $p): $anon = strncmp($p['name'], 'anon', 4) === 0; ?>
+              <tr data-key="<?= e($rk) ?>"<?= $anon ? ' class="anon-row" data-anon-of="' . e($lk) . '" hidden' : '' ?>>
                 <?php // THREE states, because there are three. Orange: traffic
                       // with no session behind it. Green: an account that has
                       // actually signed in. Grey: an account that exists and
@@ -1652,10 +1725,16 @@ function cell_chip(?int $sev, string $repo, array $running): string
                 <td<?= $anon ? ' title="Requests with no session — public pages, the login wall, and anyone browsing signed out. Numbered per address, in the order first seen."' : '' ?>>
                   <span class="usage-dot <?= $anon ? 'out' : ($p['last'] ? 'in' : 'never') ?>"></span>
                   <span class="repo-name"><?= e($p['name']) ?></span>
-                  <?php // The address, and what it says about itself — the
-                        // whole reason the log keeps one. ?>
-                  <?php if (!empty($usage['anon_ip'][$p['name']])): ?><span class="who-ip"><?= e($usage['anon_ip'][$p['name']]) ?></span><?php endif; ?>
                 </td>
+                <?php // ADDRESS AND LOCATION are their own columns so each can
+                      // be sorted — under the name they could only be read one
+                      // row at a time. The location is whatever geoip.php's
+                      // cache holds; the offline class is the fallback, and it
+                      // is honest about being one. ?>
+                <td class="mono"><?= e($p['ip'] ?? '') ?: '&mdash;' ?></td>
+                <td class="mono soft"><?= !empty($p['geo']) && $p['geo'] !== '-'
+                    ? e($p['geo'])
+                    : (!empty($p['ip']) ? '<span class="unloc">' . e(hit_where($p['ip'])) . '</span>' : '&mdash;') ?></td>
                 <?php foreach (array_keys($uw) as $wk): ?>
                   <td class="num<?= $p['counts'][$wk] ? '' : ' zero' ?>" data-win="<?= e($wk) ?>"><?= number_format($p['counts'][$wk]) ?></td>
                 <?php endforeach; ?>
@@ -1832,6 +1911,22 @@ function cell_chip(?int $sev, string $repo, array $running): string
         });
         tr.classList.toggle('app-zero', total === 0);
       });
+      // …and the summary row, which is the sum of the rows it hides.
+      document.querySelectorAll('#tab-usage .anon-summary').forEach((sum) => {
+        const lane = sum.dataset.anonGroup;
+        const mine = [...document.querySelectorAll('.anon-row[data-anon-of="' + CSS.escape(lane) + '"]')];
+        sum.querySelectorAll('td[data-anon-win]').forEach((td) => {
+          const wk = td.dataset.anonWin;
+          let t = 0;
+          mine.forEach((tr) => {
+            const p = USAGE.people[tr.dataset.key];
+            if (!p) { return; }
+            t += app === '*' ? (p.counts[wk] || 0) : (((p.apps || {})[app] || {})[wk] || 0);
+          });
+          td.textContent = t.toLocaleString();
+          td.classList.toggle('zero', t === 0);
+        });
+      });
       drawUsage();
     }
     document.querySelectorAll('#app-pick .inst-tab').forEach(b => b.addEventListener('click', () => {
@@ -1869,6 +1964,18 @@ function cell_chip(?int $sev, string $repo, array $running): string
     b.addEventListener('click', () => showInstance(b.dataset.inst)));
   showInstance('prod');
 
+  // The anon group expands in place. Hidden by default: the summary IS the
+  // view, and the detail is one click away rather than a wall of rows.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.anon-toggle');
+    if (!btn) { return; }
+    const lane = btn.closest('.anon-summary').dataset.anonGroup;
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.querySelectorAll('.anon-row[data-anon-of="' + CSS.escape(lane) + '"]')
+      .forEach(tr => { tr.hidden = !open; });
+  });
+
   // The Current tables sort on a header click, same gesture as Live Status.
   // Delegated, because the live poller replaces rows wholesale.
   document.addEventListener('click', (e) => {
@@ -1879,10 +1986,16 @@ function cell_chip(?int $sev, string $repo, array $running): string
     const dir = th.classList.contains('sorted-asc') ? -1 : 1;
     table.querySelectorAll('th').forEach(o => o.classList.remove('sorted-asc', 'sorted-desc'));
     th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
-    [...body.querySelectorAll('tr')]
+    // The anon summary and its members are one unit and always sit last —
+    // sorting them in among the named accounts would scatter a group that
+    // exists to stay together.
+    const rows = [...body.querySelectorAll('tr')];
+    const group = rows.filter(r => r.classList.contains('anon-summary') || r.classList.contains('anon-row'));
+    rows.filter(r => !group.includes(r))
       .sort((a, b) => dir * (a.children[col]?.textContent.trim() || '')
         .localeCompare(b.children[col]?.textContent.trim() || '', undefined, { numeric: true }))
       .forEach(tr => body.appendChild(tr));
+    group.forEach(tr => body.appendChild(tr));
   });
 
   function showTab(name) {

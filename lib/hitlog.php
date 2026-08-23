@@ -398,7 +398,7 @@ function hit_usage(array $roster = []): array
             } else {
                 if (!isset($anonNo[$v])) { $anonNo[$v] = $nextAnon++; }
                 $who = 'anon-' . $anonNo[$v];
-                $anonIp[$who] = $v . ' · ' . hit_where($v);
+                $anonIp[$who] = $v;
             }
         } else {
             $who = $r['user'];
@@ -416,6 +416,10 @@ function hit_usage(array $roster = []): array
                              'counts' => array_fill_keys(array_keys($wins), 0), 'apps' => []];
         }
         $people[$key]['last'] = max($people[$key]['last'], $r['ts']);
+        // The address rides on the person, so the page can give it a column of
+        // its own and sort by it rather than tucking it under a name.
+        $ipHere = (string) ($r['ip'] ?? '-');
+        if ($ipHere !== '-' && empty($people[$key]['ip'])) { $people[$key]['ip'] = $ipHere; }
         foreach ($wins as $wk => $w) {
             if ($r['ts'] < $now - $w['secs']) { continue; }
             $people[$key]['counts'][$wk]++;
@@ -472,6 +476,14 @@ function hit_usage(array $roster = []): array
                     if ($b >= 0 && $b < $n) { $out[$wk][$app][$key][$b] = (int) $c; }
                 }
             }
+        }
+    }
+
+    // The located label for each person's address, from geoip.php's cache —
+    // a read, never a lookup: the resolving happens on the sweep's clock.
+    if (function_exists('geo_for')) {
+        foreach ($people as $k => $pp) {
+            if (!empty($pp['ip'])) { $people[$k]['geo'] = geo_for($pp['ip']); }
         }
     }
 

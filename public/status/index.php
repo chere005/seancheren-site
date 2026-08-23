@@ -123,7 +123,7 @@ $repos = [
    'sync' => '<code>seancheren.com/CalMind/api</code> — every client syncs through it. Also on <code>test.</code> and <code>dev.</code>',
    'plat' => [
      'web'     => [0, 'seancheren.com/CalMind'],
-     'macos'   => [0, 'Tauri desktop', '/Applications'],
+     'macos'   => [0, 'desktop app', '/Applications &middot; Tauri shell'],
      'windows' => [0, 'CI build', 'GitHub Actions artifact'],
      'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
      'watchos' => [0, 'verified', 'paired Apple Watch'],
@@ -133,17 +133,17 @@ $repos = [
    'sync' => '<code>seancheren.com/CalMind/api</code>, <code>chef</code> space. No backend of its own.',
    'plat' => [
      'web'     => [0, 'seancheren.com/ChefMind'],
-     'macos'   => [0, 'Tauri desktop', '/Applications'],
+     'macos'   => [0, 'desktop app', '/Applications &middot; Tauri shell'],
      'windows' => [0, 'CI build', 'GitHub Actions artifact'],
      'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
      'watchos' => [null, '&mdash;', 'no watch target'],
      'android' => [0, 'verified', 'local emulator'],
    ]],
   ['name' => 'AcctMind', 'group' => 'mindsuite', 'tag' => 'separate build',
-   'sync' => '<code>seancheren.com/AcctMind</code>, and <code>test.seancheren.com/AcctMind</code>.',
+   'sync' => 'Nothing syncs — every transaction lives in the browser\'s own storage. The server is a doorway that checks the suite\'s sign-in and hands over the app.',
    'plat' => [
      'web'     => [0, 'seancheren.com/AcctMind'],
-     'macos'   => [0, 'Tauri desktop', '/Applications'],
+     'macos'   => [0, 'desktop app', '/Applications &middot; Tauri shell'],
      'windows' => [0, 'CI build', 'GitHub Actions artifact'],
      'ios'     => [0, 'verified', 'iPhone — 1 of 3 slots'],
      'watchos' => [null, '&mdash;', 'no watch target'],
@@ -153,7 +153,7 @@ $repos = [
    'sync' => 'Bonjour over the LAN, <code>_calmind-local._tcp</code>. No internet, no backup — the device is the only copy.',
    'plat' => [
      'web'     => [null, 'none'],
-     'macos'   => [0, 'Mac Catalyst', '/Applications'],
+     'macos'   => [0, 'desktop app', '/Applications &middot; Mac Catalyst'],
      'windows' => [null, '&mdash;', 'no Tauri shell'],
      'ios'     => [1, 'builds', "not installed — protects the phone's 3-app cap"],
      'watchos' => [1, 'builds', 'not installed to a watch'],
@@ -358,7 +358,6 @@ function check_url(string $url, ?string $post = null): array
  *
  *   'status_probes' => [
  *     'calmind'  => ['user' => '…', 'pass' => '…'],   // CalMind's API
- *     'acctmind' => ['user' => '…', 'pass' => '…'],   // AcctMind's browser password box
  *     'site'     => ['user' => '…', 'pass' => '…'],   // this site's own login
  *   ],
  *
@@ -407,12 +406,14 @@ function probe_http(string $url, string $method, array $headers, ?string $body):
 function auth_scopes(): array
 {
     return [
-        'calmind' => ['label' => 'CalMind accounts',
+        'calmind' => ['label' => 'CalMind account',
                       'probe' => ['kind' => 'calmind-api', 'cred' => 'calmind',
                                   'url' => 'https://seancheren.com/CalMind/api/index.php']],
-        'acctmind' => ['label' => 'AcctMind accounts',
-                       'probe' => ['kind' => 'http-basic', 'cred' => 'acctmind',
-                                   'url' => 'https://seancheren.com/AcctMind/']],
+        // NO acctmind scope. AcctMind has no accounts of its own — it reuses the
+        // suite's sign-in, same store and same session cookie. This page said it
+        // had its own system "behind HTTP Basic", inferred from a bare 401; the
+        // response carries no WWW-Authenticate at all, it is the site's form
+        // answered with a 401 status. Read the headers, not the status code.
         'site' => ['label' => 'site login',
                    'probe' => ['kind' => 'site-form', 'cred' => 'site',
                                'url' => 'https://seancheren.com/akisthemes/']],
@@ -441,12 +442,6 @@ function check_login(array $login): array
                 return ['state' => 'ok', 'why' => 'signed in, token issued'];
             }
             return ['state' => 'failed', 'why' => 'HTTP ' . $st . ' — ' . substr(strip_tags($body), 0, 80)];
-
-        case 'http-basic':
-            [$st] = probe_http($login['url'], 'GET',
-                ['Authorization' => 'Basic ' . base64_encode($creds['user'] . ':' . $creds['pass'])], null);
-            if ($st >= 200 && $st < 400) { return ['state' => 'ok', 'why' => 'HTTP ' . $st . ' with credentials']; }
-            return ['state' => 'failed', 'why' => 'HTTP ' . $st . ' with credentials'];
 
         case 'site-form':
             // This site's own login answers a good password with a 302 to
@@ -478,7 +473,7 @@ $endpoints = [
             ['label' => 'CalMind',  'app' => 'CalMind',  'url' => 'https://test.seancheren.com/CalMind/',
              'scope' => 'CalMind &middot; test store', 'scope_key' => 'calmind', 'auth' => "CalMind's own accounts, test instance — its own data, its own store"],
             ['label' => 'AcctMind', 'app' => 'AcctMind', 'url' => 'https://test.seancheren.com/AcctMind/',
-             'scope' => 'AcctMind &middot; browser password box', 'scope_key' => 'acctmind', 'auth' => "AcctMind's own accounts, test instance — same browser password box"],
+             'scope' => 'sandbox login', 'scope_key' => 'site', 'auth' => "The sandbox's sign-in, reused the same way — its own account store, not production's"],
         ],
     ],
     'site' => [

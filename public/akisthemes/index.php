@@ -32,6 +32,20 @@ foreach ($__cands as $__c) {
 require_once $__libDir . '/auth.php';
 require_once $__libDir . '/chrome.php';
 require_login('Themes');
+// Aki and Sean only — Sean, 2026-08-23: "restrict akisthemes to only aki and
+// sean". The bench builds palettes the whole suite can adopt, so it is a
+// workshop and not a public toy; the session is the suite's shared one, so
+// this refuses rather than destroys it, same shape as the bookshelf's gate.
+if (!themes_may(current_user())) {
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+       . '<title>Themes</title>'
+       . '<body style="font-family:system-ui,sans-serif;background:#111;color:#eee;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;padding:2rem;margin:0">'
+       . '<div><p style="font-size:1.15rem;margin:0 0 1rem">The themes bench is aki\'s and sean\'s.</p>'
+       . '<p style="margin:0"><a href="?logout" style="color:#5fb6ac">Log out</a> and sign in as one of them.</p></div></body>';
+    exit;
+}
 
 /**
  * A workbench for building colour palettes. It is **not** wired to Aki's Bookshelf: the

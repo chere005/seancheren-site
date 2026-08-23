@@ -219,6 +219,35 @@ const THEMES = [
  *  native controls (selects, scrollbars, date pickers) draw the right way round. */
 const THEMES_LIGHT = ['sage'];
 
+/**
+ * WHO MAY USE THE THEMES BENCH — Sean, 2026-08-23: "restrict akisthemes to
+ * only aki and sean". It builds palettes the whole suite can adopt, so it is
+ * a workshop, not a public toy.
+ *
+ * The list lives HERE rather than in the page because it is a rule, and a
+ * rule with a test beside it is the house standard. A scratch instance
+ * (SUITE_DATA_DIR set, i.e. tools/test.php) may widen it — that page stands
+ * in for "any page behind the login" throughout the suite's own checks — and
+ * "*" means any signed-in account. Production sets neither variable and gets
+ * exactly aki and sean; a gate that an env var alone could widen would not be
+ * a gate.
+ */
+function themes_users(): array
+{
+    if (getenv('SUITE_DATA_DIR') && ($x = getenv('SUITE_THEMES_USERS'))) {
+        return array_map('trim', explode(',', $x));
+    }
+    return ['aki', 'sean'];
+}
+
+/** True when $user may open the themes bench. Signed out is never allowed. */
+function themes_may(?string $user): bool
+{
+    if ($user === null || $user === '') { return false; }
+    $allowed = themes_users();
+    return in_array('*', $allowed, true) || in_array($user, $allowed, true);
+}
+
 function theme_file(): string
 {
     return rtrim(app_config()['data_dir'], '/') . '/prefs-'

@@ -427,13 +427,18 @@ function cell_chip(?int $sev, string $repo, array $running): string
   }
   .table-scroll { overflow-x: auto; }
 
-  table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1180px; }
+  /* The matrix is WIDE and scrolls; the columns are sized so nothing wraps
+     mid-value. A 150px device column broke "Aug 22, 4:23 pm" across two lines
+     and pushed "/Applications/CalMind.app" into its neighbour — a date split
+     after the comma reads as two facts. Every track below holds its longest
+     real content, and .cell-note keeps each line whole. */
+  table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1420px; }
 
-  col.repo { width: 170px; }
-  col.web  { width: 215px; }
+  col.repo { width: 168px; }
+  col.web  { width: 210px; }
   /* Was 420px, when this column held a paragraph each. It holds one line now. */
-  col.sync { width: 300px; }
-  col.plat { width: 150px; }
+  col.sync { width: 292px; }
+  col.plat { width: 188px; }
 
   thead th {
     position: sticky; top: 0; background: var(--surface-alt); text-align: left;
@@ -442,6 +447,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
     padding: 12px 14px; border-bottom: 1px solid var(--line); white-space: nowrap;
   }
   tbody td { padding: 14px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 0.87rem; line-height: 1.5; }
+  td.prose code { white-space: nowrap; }
+  /* A repo's tag under its name is a label, not a sentence — wrapping
+     "cloned from the bookshelf" over three lines made one row twice the
+     height of its neighbours for no information. */
+  .repo-tag { white-space: nowrap; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: var(--surface-alt); }
 
@@ -482,7 +492,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
   tbody tr.outside:hover td { background: var(--surface-alt); }
   tbody tr.outside .repo-name { color: var(--ink-soft); }
 
-  .cell-note { display: block; margin-top: 5px; font-size: 0.74rem; color: var(--ink-faint); line-height: 1.45; }
+  .cell-note { display: block; margin-top: 5px; font-size: 0.74rem; color: var(--ink-faint); line-height: 1.45;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The one note that is legitimately long. It may wrap; it may not be cut. */
+  .cell-note .nowrap { white-space: nowrap; overflow: visible; }
+  .cell-note.building { color: var(--running); opacity: 0.85; }
   .cell-note .nowrap { white-space: nowrap; }
   .cell-note br { content: ""; display: block; margin-top: 1px; }
 
@@ -492,11 +506,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
      swatch is its own fixed-size element now — same 10px marker the chips
      draw, nothing sizing it but the CSS. */
   .domain-head {
-    font-family: var(--font-mono); font-size: 0.74rem; font-weight: 500;
-    letter-spacing: 0.06em; color: var(--ink-soft);
-    margin: 18px 0 2px; padding-bottom: 6px; border-bottom: 1px solid var(--line);
+    font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600;
+    letter-spacing: 0.05em; color: var(--ink);
+    margin: 0; padding: 18px 18px 10px; background: var(--surface-alt);
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
   }
-  .endpoint-group > .domain-head:first-of-type { margin-top: 8px; }
+  .endpoint-group > div:first-of-type .domain-head { border-top: none; }
   .domain-note { color: var(--ink-faint); letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.66rem; }
 
   .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 16px 18px; background: var(--surface-alt); border-top: 1px solid var(--line); font-size: 0.8rem; color: var(--ink-soft); }
@@ -556,16 +571,31 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .sec-open .endpoint-row > [data-col="3"],
   .sec-open .endpoint-ms { grid-column: 5; }
   .endpoint-row:last-child { border-bottom: none; }
-  .sec + .sec { margin-top: 4px; }
+  /* A SUBSECTION IS A HEADING, not a stray label. It sat in the same weight
+     and colour as the column header directly under it, so "SIGN-IN REQUIRED"
+     and "ENDPOINT / URL" read as one confused two-line strip. It gets its own
+     band, a rule above it, and an accent mark — three levels now read as
+     three: domain, subsection, columns. */
+  .sec + .sec { margin-top: 0; }
   .sec-head {
-    font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.09em;
-    text-transform: uppercase; color: var(--ink-faint);
-    padding: 12px 18px 0;
+    display: flex; align-items: center; gap: 9px;
+    font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600;
+    letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-soft);
+    padding: 16px 18px 10px; border-top: 1px solid var(--line);
   }
+  .sec:first-child .sec-head { border-top: none; }
+  .sec-head::before {
+    content: ""; width: 3px; height: 12px; border-radius: 2px; flex: none;
+    background: var(--accent);
+  }
+  /* Public rows are the open half — a quieter mark says so without a word. */
+  .sec-open .sec-head { color: var(--ink-faint); }
+  .sec-open .sec-head::before { background: var(--ink-faint); opacity: 0.5; }
+  .sec-count { margin-left: auto; font-weight: 400; letter-spacing: 0.06em; color: var(--ink-faint); }
   .endpoint-head {
-    font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--ink-faint); padding-top: 8px; padding-bottom: 8px;
-    background: var(--surface-alt);
+    font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--ink-faint); padding-top: 4px; padding-bottom: 8px;
+    background: transparent; border-bottom: 1px solid var(--line);
   }
   .endpoint-head [data-col]:hover { color: var(--ink); }
   .endpoint-head [data-col].sorted { color: var(--accent); }
@@ -623,6 +653,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .usage-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 9px; flex: none; }
   .usage-dot.in  { background: var(--live); }
   .usage-dot.out { background: var(--partial); }
+  .usage-dot.never { background: transparent; border: 1.5px solid var(--ink-faint); }
   .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
 
   .tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
@@ -826,7 +857,17 @@ function cell_chip(?int $sev, string $repo, array $running): string
                 $c = $r['plat'][$plat] ?? [null, '&mdash;']; ?>
                 <td>
                   <span class="chip <?= cell_chip($c[0], $r['name'], $RUNNING) ?>"><?= $c[1] ?></span>
-                  <?php if (!empty($c[2])): ?><span class="cell-note"><?= $c[2] ?></span><?php endif; ?>
+                  <?php // A NOTE IS A CLAIM ABOUT THE LAST BUILD, so it goes
+                        // quiet while the next one runs — Sean, 2026-08-23:
+                        // "the install dates and destination should disappear
+                        // while building and then update with their new status
+                        // after another event occurs in the build log". A cell
+                        // reading "Aug 22, 4:23 pm" under a purple chip is
+                        // dating a bundle that is being replaced as you read
+                        // it. The note returns, with its new date, on the
+                        // first sweep after the run ends.
+                        if (!empty($c[2]) && !isset($RUNNING[$r['name']])): ?><span class="cell-note"><?= $c[2] ?></span>
+                  <?php elseif (isset($RUNNING[$r['name']])): ?><span class="cell-note building">building&hellip;</span><?php endif; ?>
                 </td>
               <?php endforeach; ?>
             </tr>
@@ -1389,7 +1430,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         foreach ($sections as [$secName, $secList, $gated]):
           if (!$secList) { continue; } ?>
           <div class="sec<?= $gated ? '' : ' sec-open' ?>">
-            <div class="sec-head"><?= e($secName) ?></div>
+            <div class="sec-head"><?= e($secName) ?><span class="sec-count"><?= count($secList) ?></span></div>
             <div class="endpoint-row endpoint-head" data-sortable>
               <div data-col="0">Endpoint</div><div data-col="1">URL</div><div data-col="2">Status</div>
               <?php if ($gated): ?><div data-col="3">Sign-in</div><?php endif; ?>
@@ -1538,7 +1579,15 @@ function cell_chip(?int $sev, string $repo, array $running): string
           <tbody>
             <?php foreach ($rows as $rk => $p): ?>
               <tr>
-                <td><span class="usage-dot <?= $p['name'] === '(signed out)' ? 'out' : 'in' ?>"></span><span class="repo-name"><?= e($p['name']) ?></span></td>
+                <?php // THREE states, because there are three. Orange: traffic
+                      // with no session behind it. Green: an account that has
+                      // actually signed in. Grey: an account that exists and
+                      // has never been seen — a green dot on those claimed
+                      // they were signed in, which they never have been. ?>
+                <td<?= $p['name'] === 'anonymous' ? ' title="Requests with no session — public pages, the login wall, and anyone browsing signed out."' : '' ?>>
+                  <span class="usage-dot <?= $p['name'] === 'anonymous' ? 'out' : ($p['last'] ? 'in' : 'never') ?>"></span>
+                  <span class="repo-name"><?= e($p['name']) ?></span>
+                </td>
                 <?php foreach (array_keys($uw) as $wk): ?>
                   <td class="num<?= $p['counts'][$wk] ? '' : ' zero' ?>"><?= number_format($p['counts'][$wk]) ?></td>
                 <?php endforeach; ?>

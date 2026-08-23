@@ -31,6 +31,11 @@ $only = array_values(array_filter($args, fn($a) => strncmp($a, '--', 2) !== 0));
 
 $scratch = sys_get_temp_dir() . '/seancheren-test-' . getmypid();
 putenv('SUITE_DATA_DIR=' . $scratch);      // for this process (the unit checks)
+// The themes bench gates on aki and sean in production (2026-08-23). This page
+// stands in for "any page behind the login" throughout this suite, so a scratch
+// run names its own testers — and the gate itself is proven below, against a
+// user who is on nobody's list.
+putenv('SUITE_THEMES_USERS=*');   // any signed-in account, in scratch only
 @mkdir($scratch, 0700, true);
 
 require_once $root . '/lib/auth.php';
@@ -786,6 +791,33 @@ t('a changed password takes effect and the old one stops working', function () {
     req('GET', '/akisthemes/', [], $j2);
     eq(302, req('POST', '/akisthemes/', ['username' => 'newbie', 'password' => 'brandnewpass'], $j2)['status'],
        'the new one works');
+});
+
+t('the themes bench admits aki and sean, and nobody else', function () {
+    // The PRODUCTION rule, checked directly — this suite runs with the list
+    // widened to "*" so the page can stand in for any logged-in page, which
+    // would otherwise mean the gate Sean asked for was never tested at all.
+    // Unsetting the override is what puts the real rule back.
+    $was = getenv('SUITE_THEMES_USERS');
+    putenv('SUITE_THEMES_USERS');
+    try {
+        eq(['aki', 'sean'], themes_users(), 'the production list');
+        ok(themes_may('aki'), 'aki may');
+        ok(themes_may('sean'), 'sean may');
+        ok(!themes_may('example'), 'a demo account may not');
+        ok(!themes_may('admin'), 'nor may an admin account — the list is the list');
+        ok(!themes_may(null), 'and signed out never may');
+    } finally {
+        putenv('SUITE_THEMES_USERS=' . $was);
+    }
+    // …and the widening only works inside a scratch instance.
+    $wasDir = getenv('SUITE_DATA_DIR');
+    putenv('SUITE_DATA_DIR');
+    try {
+        ok(!themes_may('example'), 'the override is ignored outside a scratch run');
+    } finally {
+        putenv('SUITE_DATA_DIR=' . $wasDir);
+    }
 });
 
 t('a PLAINTEXT password on disk authenticates nobody', function () use ($scratch) {
@@ -1562,6 +1594,7 @@ $PORT = (int) explode(':', stream_socket_get_name($sock, false))[1];
 fclose($sock);
 $desc = [1 => ['file', '/dev/null', 'w'], 2 => ['file', $scratch . '/server.log', 'w']];
 $SRV = proc_open('SUITE_DATA_DIR=' . escapeshellarg($scratch)
+    . ' SUITE_THEMES_USERS=' . escapeshellarg((string) getenv('SUITE_THEMES_USERS'))
     . ' php -d display_errors=1 -d error_reporting=E_ALL'
     . ' -S 127.0.0.1:' . $PORT . ' -t ' . escapeshellarg($root . '/public'), $desc, $pipes);
 register_shutdown_function(function () use (&$SRV, $scratch, $keep) {

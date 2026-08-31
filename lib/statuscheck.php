@@ -622,8 +622,8 @@ function check_login(array $login): array
             return ['state' => 'failed', 'why' => 'HTTP ' . $st . ' — ' . substr(strip_tags($body), 0, 80)];
 
         case 'site-form':
-            // This site's own login answers a good password with a 302 to
-            // LOGIN_LANDING and a bad one with the form again, 200.
+            // This site's own login answers a good password with a 302 back
+            // to the page that asked, and a bad one with the form again, 200.
             [$st] = probe_http($login['url'], 'POST', ['Content-Type' => 'application/x-www-form-urlencoded'],
                 http_build_query(['username' => $creds['user'], 'password' => $creds['pass']]));
             if ($st === 302) { return ['state' => 'ok', 'why' => 'password accepted, redirected in']; }

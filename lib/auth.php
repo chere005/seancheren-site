@@ -74,15 +74,15 @@ function _self_path(): string
     return strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
 }
 
-/**
- * Where you land once you're signed in, whichever page asked you to log in.
- *
- * It was the suite's Calendar until 2026-08-22. With the suite gone, this login guards
- * Chat, Aki's Bookshelf, the themes workbench and the status page — no one of which is
- * everybody's front door — so it lands on the site's own home page, which links to all
- * of them.
+/*
+ * Where you land once you're signed in: THE PAGE THAT ASKED. This was a
+ * LOGIN_LANDING constant of '/' until 2026-08-31 — reasonable when the login
+ * was the suite's one front door, but with the guard on Chat, Aki's
+ * Bookshelf, the themes workbench and the status page, signing in on
+ * /status and landing on the home page reads as a broken page (Sean hit
+ * exactly that). The form posts to _self_path(), so the guarded page's own
+ * URL is the request URL by the time the redirect is written.
  */
-const LOGIN_LANDING = '/';
 
 /**
  * Accounts people made themselves, keyed by username: ['email' => …, 'password' => …].
@@ -463,7 +463,7 @@ function require_login(string $area = 'App'): void
             $_SESSION['auth'] = true;
             $_SESSION['user'] = $u;
             usage_log('login', $u);
-            header('Location: ' . suite_path() . LOGIN_LANDING);
+            header('Location: ' . _self_path());
             exit;
         }
         usage_log('login_fail', $u);
@@ -642,7 +642,7 @@ function signup_handle(array $cfg): array
     $_SESSION['auth'] = true;
     $_SESSION['user'] = $user;
     usage_log('signup_ok', $user);
-    header('Location: ' . suite_path() . LOGIN_LANDING);
+    header('Location: ' . _self_path());
     exit;
 }
 

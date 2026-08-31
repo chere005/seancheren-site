@@ -287,15 +287,16 @@ t('a wrong password is refused', function () {
     has('Invalid username or password', $r['body']);
 });
 
-t('a good password lands you on the site home, wherever you signed in', function () {
-    // It was the suite's Calendar until the suite went. With the login now guarding a
-    // handful of unrelated pages, home — which links to all of them — is the landing.
+t('a good password lands you back on the page you signed in from', function () {
+    // '/' was the landing until 2026-08-31, a leftover from when the login had
+    // one front door. Signing in ON /status and landing on home read as a
+    // broken page; every guarded page now gets you back to itself.
     foreach (['/akisthemes/', '/akisbookshelf/', '/status/'] as $from) {
         $jar = [];
         req('GET', $from, [], $jar);
         $r = req('POST', $from, ['username' => 'example', 'password' => 'examplepassword'], $jar);
         eq(302, $r['status'], "$from status");
-        eq('/', $r['location'], "signing in from $from lands on home");
+        eq($from, $r['location'], "signing in from $from returns to it");
     }
 });
 
@@ -601,12 +602,16 @@ t('both instances come up from their own config, with no environment help', func
 });
 
 
-t('signing in lands you inside the instance you signed in to', function () {
+t('signing in lands you back on the page that asked, in its own instance', function () {
     ['port' => $p] = instance_boot();
+    // Landing changed 2026-08-31: '/' as a fixed landing made signing in ON
+    // /status read as a redirect-to-nowhere. You now return to the guarded
+    // page itself — which also proves the instance never leaks, since the
+    // page's own path carries the prefix.
     [, $t] = instance_login($p, '/test');
-    eq('/test/', $t['location'], 'the sandbox login lands in the sandbox');
+    eq('/test/akisthemes/', $t['location'], 'the sandbox login lands on the sandbox page that asked');
     [, $r] = instance_login($p, '');
-    eq('/', $r['location'], 'production stays in production');
+    eq('/akisthemes/', $r['location'], 'production lands on the page that asked');
 });
 
 
@@ -714,7 +719,7 @@ t('the right code makes the account and signs you in', function () use ($scratch
         'email' => 'newbie@example.com', 'newpass' => 'newbiepass'], $jar);
     $r = req('POST', '/akisthemes/', ['action' => 'verify', 'newuser' => 'newbie', 'code' => SIGNUP_CODE], $jar);
     eq(302, $r['status'], 'verifying redirects');
-    eq('/', $r['location'], 'straight in, on the site home');
+    eq('/akisthemes/', $r['location'], 'straight in, back on the page that asked');
     $acc = store_read($scratch . '/accounts.json');
     ok(isset($acc['newbie']), 'the account is real now');
     // HASHED, not stored. This assertion read `eq('newbiepass', …)` until

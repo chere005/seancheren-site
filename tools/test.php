@@ -1479,6 +1479,117 @@ t('hit_counts only counts inside its window', function () {
     eq(1, $c['hour']['people'], 'signed-in visitors are counted apart');
 });
 
+t('hit_counts splits by instance, and the parts make the whole', function () {
+    // The status page's one instance picker claims to scope the whole page.
+    // This strip answered "the whole host" whichever button was lit.
+    $log = datadir() . '/hits.log';
+    $t = time() - 30;
+    file_put_contents($log, implode("\n", [
+        "$t\tprod\tabout\tGET\t-\t-\t1.2.3.4",
+        "$t\tprod\tabout\tGET\tsean\t-\t1.2.3.4",
+        "$t\ttest\tabout\tGET\t-\t-\t1.2.3.5",
+        "$t\tdev\tabout\tGET\t-\t-\t1.2.3.6",
+        "$t\tdev\tabout\tGET\t-\t-\t1.2.3.6",
+    ]) . "\n");
+    $c = hit_counts(['hour' => 3600])['hour'];
+    eq(2, $c['by_inst']['prod']['hits'], 'production');
+    eq(1, $c['by_inst']['test']['hits'], 'the test sandbox');
+    eq(2, $c['by_inst']['dev']['hits'], 'the dev sandbox');
+    eq(5, $c['hits'], 'and the total is still the whole host');
+    eq(1, $c['by_inst']['prod']['people'], 'the signed-in visitor is production’s');
+    eq(0, $c['by_inst']['dev']['people'], 'not the sandbox’s');
+});
+
+t('anonymous visitors are one row, not one row each', function () {
+    // Sean, 2026-09-03: "group together anonymous requests, don't list hundreds
+    // of anon-xxxx". Three days of scanner traffic was over a thousand rows —
+    // and a thousand lines on the chart, burying the named accounts the table
+    // exists to show.
+    $log = datadir() . '/hits.log';
+    $t = time() - 30;
+    $lines = [];
+    foreach (range(1, 40) as $i) { $lines[] = "$t\tprod\thome\tGET\t-\t-\t9.9.9.$i"; }
+    $lines[] = "$t\tprod\thome\tGET\tsean\t-\t9.9.9.1";
+    file_put_contents($log, implode("\n", $lines) . "\n");
+
+    $u = hit_usage();
+    $names = array_column($u['people'], 'name');
+    eq(['sean', 'anonymous'], $names, 'forty addresses are one row, behind the named account');
+    eq(0, count(array_filter($names, fn($n) => strncmp($n, 'anon-', 5) === 0)), 'and none of them is an anon-N');
+
+    $anon = $u['people']['other|prod|anonymous'];
+    eq(40, $anon['counts']['hour'], 'the row carries every one of their requests');
+    eq(40, $anon['addresses'], 'and says how many addresses that was');
+    eq(HIT_ADDR_TOP, count($anon['top']), 'the busiest handful ride along for the fold-out');
+    ok(count($anon['top']) < $anon['addresses'], 'capped — the point is not to ship the wall');
+});
+
+t('a lane total is the sum of the rows under it', function () {
+    // The invariant the Usage tab broke: the headline said 9 over a table whose
+    // rows added to 0, because each worked its own total out separately.
+    $log = datadir() . '/hits.log';
+    $t = time() - 30;
+    file_put_contents($log, implode("\n", [
+        "$t\tprod\thome\tGET\tsean\t-\t1.2.3.4",
+        "$t\tprod\thome\tGET\t-\t-\t5.6.7.8",
+        "$t\tprod\tabout\tGET\t-\t-\t5.6.7.9",
+        "$t\tdev\thome\tGET\t-\t-\t5.6.7.9",
+    ]) . "\n");
+    $u = hit_usage();
+    foreach (['sean' => 1, 'other' => 2, 'dev' => 1] as $lane => $want) {
+        $inst = $lane === 'dev' ? 'dev' : 'prod';
+        $sum = 0;
+        foreach ($u['people'] as $p) {
+            if ($p['lane'] === $lane && $p['inst'] === $inst) { $sum += $p['counts']['hour']; }
+        }
+        eq($want, hit_usage_total($u['people'], $lane, $inst, 'hour'), $lane . ' headline');
+        eq($want, $sum, $lane . ' rows add to the same');
+    }
+    // …and per app, which is what the app filter rewrites the table with.
+    eq(1, hit_usage_total($u['people'], 'other', 'prod', 'hour', 'about'), 'one of the two was /about');
+    eq(0, hit_usage_total($u['people'], 'other', 'prod', 'hour', 'nosuchapp'), 'an app nobody hit is zero, not everything');
+});
+
+t("Claude's traffic is split by instance, not pooled across them", function () {
+    // The lane is one across all three instances by design, so without the
+    // instance in the key its row could never narrow to the chosen one — and
+    // the Claudio card is the one card the picker leaves on screen.
+    $log = datadir() . '/hits.log';
+    $t = time() - 30;
+    file_put_contents($log, implode("\n", [
+        "$t\tprod\thome\tGET\t-\tclaudio\t1.2.3.4",
+        "$t\tprod\thome\tGET\t-\tclaudio\t1.2.3.4",
+        "$t\ttest\thome\tGET\t-\tclaudio\t1.2.3.4",
+        "$t\tdev\thome\tGET\t-\tclaudio\t1.2.3.4",
+    ]) . "\n");
+    $u = hit_usage();
+    eq(2, hit_usage_total($u['people'], 'claudio', 'prod', 'hour'), 'production');
+    eq(1, hit_usage_total($u['people'], 'claudio', 'test', 'hour'), 'the test sandbox');
+    eq(1, hit_usage_total($u['people'], 'claudio', 'dev', 'hour'), 'the dev sandbox');
+    eq(3, count(array_filter($u['people'], fn($p) => $p['lane'] === 'claudio')), 'one row per instance');
+});
+
+t('a known account with no traffic is still listed, at zero', function () {
+    $log = datadir() . '/hits.log';
+    file_put_contents($log, (time() - 30) . "\tprod\thome\tGET\t-\t-\t1.2.3.4\n");
+    $u = hit_usage(['sean', 'aki']);
+    ok(isset($u['people']['sean|prod|sean']), 'sean is on the roster');
+    ok(isset($u['people']['other|prod|aki']), 'and so is aki');
+    eq(0, $u['people']['other|prod|aki']['counts']['year'], 'silence reads as zero, not as absence');
+    eq(0, $u['people']['other|prod|aki']['addresses'], 'and carries no address it never had');
+});
+
+t('a sandbox prefix is stripped from the app name, for BOTH sandboxes', function () {
+    // /test was stripped and /dev was not, so a request that did arrive with
+    // the prefix filed a whole sandbox under an app called "dev".
+    foreach (['/test/contact/' => 'contact', '/dev/contact/' => 'contact',
+              '/contact/' => 'contact', '/test/' => 'home', '/dev/' => 'home',
+              '/' => 'home', '/devious/' => 'devious'] as $uri => $want) {
+        $_SERVER['REQUEST_URI'] = $uri;
+        eq($want, hit_app(), $uri);
+    }
+});
+
 area('deploy');
 
 

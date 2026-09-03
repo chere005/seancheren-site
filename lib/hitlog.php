@@ -53,6 +53,11 @@ function hit_log_path(): string
 }
 
 const HIT_LOG_MAX = 4 * 1024 * 1024;   // one rotation, so it cannot grow forever
+/** How much of the log every reader on the status page walks. One number, so
+ *  two counts of the same window cannot disagree about how far back they saw. */
+const HIT_TAIL_BYTES = 8 * 1024 * 1024;
+/** How many addresses the anonymous row lists when it is opened. */
+const HIT_ADDR_TOP = 12;
 
 /**
  * Which instance served this — 'prod' for production, 'test' for the sandbox. Read from the config the page already loaded, so it cannot
@@ -71,8 +76,11 @@ function hit_instance(): string
 function hit_app(): string
 {
     $p = (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
-    // Strip the instance prefix so /test/chat and /chat are one app.
-    $p = preg_replace('#^/test(?=/|$)#', '', $p) ?? $p;
+    // Strip the instance prefix so /test/chat and /chat are one app. BOTH
+    // sandboxes, not just test: dev came back as a real instance and this
+    // still named only one of them, so a request that did arrive with the
+    // prefix would have filed the whole sandbox under an app called "dev".
+    $p = preg_replace('#^/(test|dev)(?=/|$)#', '', $p) ?? $p;
     $first = strtok(trim($p, '/'), '/');
     if ($first === false || $first === '') { return 'home'; }
     // One clean token, capped — the segment reaches a log line, and a crafted
@@ -278,19 +286,48 @@ function hit_counts(array $windows): array
 {
     $now = time();
     $oldest = $now - max($windows);
-    $rows = hit_tail_since($oldest);
+    // HIT_TAIL_BYTES, not the 1 MB default: this and hit_usage() read the same
+    // log for the same page, and with different caps the Live tab's "hits in
+    // the last 3 days" and the Usage tab's lane totals were free to disagree
+    // the day the log passed a megabyte. One cap, one answer.
+    $rows = hit_tail_since($oldest, HIT_TAIL_BYTES);
     $out = [];
     foreach ($windows as $label => $secs) {
         $from = $now - $secs;
-        $n = 0; $users = [];
+        $n = 0; $users = []; $per = [];
         foreach ($rows as $r) {
             if ($r['ts'] < $from) { continue; }
             $n++;
-            if ($r['user'] !== '-') { $users[$r['user']] = true; }
+            $i = hit_row_instance($r);
+            $per[$i]['hits'] = ($per[$i]['hits'] ?? 0) + 1;
+            if ($r['user'] !== '-') {
+                $users[$r['user']] = true;
+                $per[$i]['users'][$r['user']] = true;
+            }
         }
-        $out[$label] = ['hits' => $n, 'people' => count($users)];
+        // Per instance as well as in total, because the status page's one
+        // picker claims to scope the whole page and this strip did not move.
+        $by = [];
+        foreach (hit_instances() as $i) {
+            $by[$i] = ['hits' => $per[$i]['hits'] ?? 0, 'people' => count($per[$i]['users'] ?? [])];
+        }
+        $out[$label] = ['hits' => $n, 'people' => count($users), 'by_inst' => $by];
     }
     return $out;
+}
+
+/** The instances that can appear in the log, in the order they are shown. */
+function hit_instances(): array { return ['prod', 'test', 'dev']; }
+
+/**
+ * Which instance a logged row belongs to, normalised. A line written before
+ * an instance existed, or by something that got the field wrong, is production
+ * — the alternative is a fourth column on the picker holding one stray row.
+ */
+function hit_row_instance(array $row): string
+{
+    $i = (string) ($row['instance'] ?? 'prod');
+    return in_array($i, hit_instances(), true) ? $i : 'prod';
 }
 
 /**
@@ -368,71 +405,91 @@ function hit_windows(): array
  */
 function hit_usage(array $roster = []): array
 {
-    $wins = hit_windows();
-    $now  = time();
-    $rows = hit_tail_since($now - max(array_column($wins, 'secs')), 8 * 1024 * 1024);
+    $wins  = hit_windows();
+    $wkeys = array_keys($wins);
+    $widest = (string) end($wkeys);          // the window every total is ranked on
+    $now   = time();
+    $rows  = hit_tail_since($now - max(array_column($wins, 'secs')), HIT_TAIL_BYTES);
 
     $people = [];
-    $lanes  = ['sean' => [], 'other' => [], 'claudio' => [], 'test' => [], 'dev' => []];
     $series = [];
-    foreach ($wins as $wk => $w) {
-        foreach (array_keys($lanes) as $lk) { $lanes[$lk][$wk] = 0; }
-    }
+    $apps   = [];   // [instance][app][window] — the picker follows the instance
+    $addr   = [];   // [person][address] => counts, apps, last seen
+    $appIps = [];   // [person][app][address] => true, for "how many addresses"
 
-    /**
-     * ANONYMOUS IS NOT ONE PERSON. Sean, 2026-08-23: "split anonymous ... to
-     * anon-1, anon-2, etc.. any unclear ones can just be anon-x". Visitors are
-     * numbered in the order they first appear in the window, so anon-1 is the
-     * earliest — a stable, readable name for a hash nobody wants to read. A
-     * line written before the token existed has nothing to tell them apart by
-     * and lands in anon-x, which is honestly one bucket of "we cannot say".
-     */
-    $anonNo = []; $anonIp = []; $nextAnon = 1;
-    $apps = [];
     foreach ($rows as $r) {
         $lane = hit_lane($r);
-        if ($r['user'] === '-') {
-            $v = (string) ($r['ip'] ?? '-');
-            if ($v === '-' || $v === '') {
-                $who = 'anon-x';
-            } else {
-                if (!isset($anonNo[$v])) { $anonNo[$v] = $nextAnon++; }
-                $who = 'anon-' . $anonNo[$v];
-                $anonIp[$who] = $v;
-            }
-        } else {
-            $who = $r['user'];
-        }
-        $app = ($r['app'] ?? '') === '' ? 'home' : $r['app'];
-        // The same name on the sandbox and on production is two lanes of
-        // usage, not one account seen twice — so the lane is part of the key.
-        // "|" and not NUL: this key becomes a data- attribute on the page,
-        // and a NUL byte does not survive one — the table could not find its own
-        // rows to rewrite. Usernames are cleaned to [A-Za-z0-9._@-], so the bar
-        // cannot collide with a name.
-        $key  = $lane . "|" . $who;
+        $inst = hit_row_instance($r);
+        /**
+         * ANONYMOUS IS ONE ROW, NOT HUNDREDS — Sean, 2026-09-03: "group
+         * together anonymous requests, don't list hundreds of anon-xxxx".
+         *
+         * They used to be numbered per address (anon-1, anon-2, …), which was
+         * literally true and unreadable: three days of scanner traffic is over
+         * a thousand rows, and every one of them was also a line on the chart,
+         * a colour in the key and an entry in the JSON the page ships. The
+         * named accounts the table exists to show were buried under it.
+         *
+         * So anonymous traffic aggregates to ONE person per lane and instance,
+         * carrying the address COUNT and — for anyone who wants to look — the
+         * busiest few addresses, which is the part of that wall worth reading.
+         */
+        $anon = ($r['user'] ?? '-') === '-';
+        $who  = $anon ? 'anonymous' : $r['user'];
+        $app  = ($r['app'] ?? '') === '' ? 'home' : $r['app'];
+        $ip   = (string) ($r['ip'] ?? '-');
+        if ($ip === '') { $ip = '-'; }
+        /**
+         * The key is LANE, INSTANCE and NAME. The instance is in it because
+         * Claude's traffic is one lane across all three instances, so without
+         * it the sandbox's requests and production's were one row that no
+         * instance picker could ever separate. Every other lane implies its
+         * own instance, so this splits nothing that was together.
+         *
+         * "|" and not NUL: this key becomes a data- attribute on the page, and
+         * a NUL byte does not survive one — the table could not find its own
+         * rows to rewrite. Usernames are cleaned to [A-Za-z0-9._@-], so the bar
+         * cannot collide with a name.
+         */
+        $key = $lane . '|' . $inst . '|' . $who;
         if (!isset($people[$key])) {
-            $people[$key] = ['name' => $who, 'lane' => $lane, 'last' => 0,
-                             'counts' => array_fill_keys(array_keys($wins), 0), 'apps' => []];
+            $people[$key] = ['name' => $who, 'lane' => $lane, 'inst' => $inst, 'anon' => $anon,
+                             'last' => 0, 'ip' => '', 'addresses' => 0, 'addr_apps' => [], 'top' => [],
+                             'counts' => array_fill_keys($wkeys, 0), 'apps' => []];
         }
         $people[$key]['last'] = max($people[$key]['last'], $r['ts']);
         // The address rides on the person, so the page can give it a column of
-        // its own and sort by it rather than tucking it under a name.
-        $ipHere = (string) ($r['ip'] ?? '-');
-        if ($ipHere !== '-' && empty($people[$key]['ip'])) { $people[$key]['ip'] = $ipHere; }
+        // its own and sort by it. The LATEST one, not the first: rows arrive
+        // oldest-first, and "where were they last seen" is the question a
+        // single address next to a name is actually asked.
+        if ($ip !== '-') { $people[$key]['ip'] = $ip; }
+
+        if (!isset($addr[$key][$ip])) { $addr[$key][$ip] = ['counts' => array_fill_keys($wkeys, 0), 'apps' => [], 'last' => 0]; }
+        $addr[$key][$ip]['last'] = max($addr[$key][$ip]['last'], $r['ts']);
+        if ($ip !== '-') { $appIps[$key][$app][$ip] = true; }
+
         foreach ($wins as $wk => $w) {
             if ($r['ts'] < $now - $w['secs']) { continue; }
             $people[$key]['counts'][$wk]++;
             $people[$key]['apps'][$app][$wk] = ($people[$key]['apps'][$app][$wk] ?? 0) + 1;
-            $lanes[$lane][$wk]++;
-            $apps[$app][$wk] = ($apps[$app][$wk] ?? 0) + 1;
+            $addr[$key][$ip]['counts'][$wk]++;
+            $addr[$key][$ip]['apps'][$app][$wk] = ($addr[$key][$ip]['apps'][$app][$wk] ?? 0) + 1;
+            $apps[$inst][$app][$wk] = ($apps[$inst][$app][$wk] ?? 0) + 1;
             $b = (int) floor(($r['ts'] - ($now - $w['secs'])) / $w['bucket']);
             $series[$wk][$app][$key][$b] = ($series[$wk][$app][$key][$b] ?? 0) + 1;
         }
     }
-    // Busiest app first, on the longest window — an app quiet this hour but
-    // heavy this year should not sort below one seen once.
-    uasort($apps, fn($a, $b) => ($b['year'] ?? 0) <=> ($a['year'] ?? 0));
+
+    // The addresses behind each row: how many, and the busiest handful. Capped
+    // — the point of the aggregate is that nobody wants the other 1,200.
+    foreach ($addr as $key => $byIp) {
+        uasort($byIp, fn($a, $b) => [$b['counts'][$widest], $b['last']] <=> [$a['counts'][$widest], $a['last']]);
+        $people[$key]['addresses'] = count(array_filter(array_keys($byIp), fn($ip) => $ip !== '-'));
+        foreach ($appIps[$key] ?? [] as $app => $set) { $people[$key]['addr_apps'][$app] = count($set); }
+        foreach (array_slice($byIp, 0, HIT_ADDR_TOP, true) as $ip => $a) {
+            $people[$key]['top'][] = ['ip' => $ip, 'counts' => $a['counts'], 'apps' => $a['apps'], 'last' => $a['last']];
+        }
+    }
 
     /**
      * EVERY KNOWN ACCOUNT, not only the ones that showed up — Sean,
@@ -441,23 +498,26 @@ function hit_usage(array $roster = []): array
      * request leaves no line in it. Silence and absence looked identical.
      * The roster fills in the rest at zero, so the list is the ACCOUNTS and
      * the numbers are the traffic.
+     *
+     * On production, which is the only instance whose account store this page
+     * can read — a sandbox has its own, behind its own data key.
      */
     foreach ($roster as $who) {
         $lane = $who === 'sean' ? 'sean' : 'other';
-        // "|" and not NUL: this key becomes a data- attribute on the page,
-        // and a NUL byte does not survive one — the table could not find its own
-        // rows to rewrite. Usernames are cleaned to [A-Za-z0-9._@-], so the bar
-        // cannot collide with a name.
-        $key  = $lane . "|" . $who;
+        $key  = $lane . '|prod|' . $who;
         if (isset($people[$key])) { continue; }
-        $people[$key] = ['name' => $who, 'lane' => $lane, 'last' => 0,
-                         'counts' => array_fill_keys(array_keys($wins), 0), 'apps' => []];
+        $people[$key] = ['name' => $who, 'lane' => $lane, 'inst' => 'prod', 'anon' => false,
+                         'last' => 0, 'ip' => '', 'addresses' => 0, 'addr_apps' => [], 'top' => [],
+                         'counts' => array_fill_keys($wkeys, 0), 'apps' => []];
     }
 
-    // Busiest first, on the shortest window that distinguishes them — an
-    // account idle this hour but heavy this year should not sort to the bottom.
-    uasort($people, function ($a, $b) use ($wins) {
-        foreach (array_keys($wins) as $wk) {
+    // Named accounts first and busiest first within them, on the shortest
+    // window that tells two apart. Anonymous sorts last however busy it is:
+    // it is one bucket standing in for a crowd, and the named accounts are
+    // what the table is for.
+    uasort($people, function ($a, $b) use ($wkeys) {
+        if ($a['anon'] !== $b['anon']) { return $a['anon'] ? 1 : -1; }
+        foreach ($wkeys as $wk) {
             if ($a['counts'][$wk] !== $b['counts'][$wk]) { return $b['counts'][$wk] <=> $a['counts'][$wk]; }
         }
         return strcmp($a['name'], $b['name']);
@@ -479,26 +539,56 @@ function hit_usage(array $roster = []): array
         }
     }
 
-    // The located label for each person's address, from geoip.php's cache —
-    // a read, never a lookup: the resolving happens on the sweep's clock.
-    if (function_exists('geo_for')) {
-        foreach ($people as $k => $pp) {
-            if (!empty($pp['ip'])) { $people[$k]['geo'] = geo_for($pp['ip']); }
-        }
+    // The located label for each address, from geoip.php's cache — a read,
+    // never a lookup: the resolving happens on the sweep's clock. The cache is
+    // loaded ONCE. geo_for() re-reads and re-decodes the whole file per call,
+    // which over a thousand anonymous visitors was a thousand reads of the
+    // same 60 KB to decorate a table.
+    $geo = function_exists('geo_all') ? geo_all() : [];
+    $label = fn(string $ip) => ($ip !== '' && $ip !== '-' && ($geo[$ip] ?? '') !== '') ? (string) $geo[$ip] : null;
+    foreach ($people as $k => $pp) {
+        $people[$k]['geo'] = $label((string) $pp['ip']);
+        foreach ($pp['top'] as $i => $t) { $people[$k]['top'][$i]['geo'] = $label((string) $t['ip']); }
     }
 
+    // The app list the picker is built from: every app seen anywhere, busiest
+    // first on the widest window, with the per-instance counts beside it.
+    $seen = [];
+    foreach ($apps as $byApp) {
+        foreach ($byApp as $app => $c) { $seen[$app] = ($seen[$app] ?? 0) + ($c[$widest] ?? 0); }
+    }
+    arsort($seen);
+
     return [
-        'windows' => $wins,
-        'people'  => $people,
-        'lanes'   => $lanes,
-        'apps'    => $apps,
-        'series'  => $out,
-        'buckets' => array_map(fn($w) => (int) ceil($w['secs'] / $w['bucket']), $wins),
-        'from'    => $now - max(array_column($wins, 'secs')),
-        'anon_ip' => $anonIp,
-        'oldest'  => $rows ? $rows[0]['ts'] : null,
-        'now'     => $now,
+        'windows'   => $wins,
+        'people'    => $people,
+        'apps'      => $apps,               // [instance][app][window]
+        'app_order' => array_keys($seen),
+        'series'    => $out,
+        'buckets'   => array_map(fn($w) => (int) ceil($w['secs'] / $w['bucket']), $wins),
+        'from'      => $now - max(array_column($wins, 'secs')),
+        'oldest'    => $rows ? $rows[0]['ts'] : null,
+        'now'       => $now,
     ];
+}
+
+/**
+ * ONE RULE FOR EVERY TOTAL ON THE USAGE TAB. The lane headline, the table row
+ * and the chart all answer "how many requests, for this lane, on this
+ * instance, in this window, for this app" — and when each of them worked it
+ * out for itself they disagreed the moment a filter was on. The page's
+ * JavaScript mirrors exactly this, and nothing else adds a number up.
+ *
+ * `$app` is '*' for every app.
+ */
+function hit_usage_total(array $people, string $lane, string $inst, string $wk, string $app = '*'): int
+{
+    $n = 0;
+    foreach ($people as $p) {
+        if ($p['lane'] !== $lane || $p['inst'] !== $inst) { continue; }
+        $n += $app === '*' ? (int) ($p['counts'][$wk] ?? 0) : (int) ($p['apps'][$app][$wk] ?? 0);
+    }
+    return $n;
 }
 
 /** Every logged hit at or after $since, oldest first. */

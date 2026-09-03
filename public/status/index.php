@@ -216,6 +216,15 @@ function status_headline(array $repos, array $endpoints, array $results, bool $i
 [$hlTitle, $hlDek, $hlKind] = status_headline($repos, $endpoints, $results, (bool) $isRunning);
 $RUNNING = running_repos($latest);
 
+/**
+ * WHICH INSTANCE THE SERVER LAYS THE PAGE OUT FOR. The picker's default, and
+ * the only instance PHP renders as "chosen" — every other instance's cells,
+ * blocks and rows are in the DOM too, and showInstance() picks between them.
+ * Named once so the Current tab's subsections, the Usage headlines and the
+ * Usage rows cannot each assume a different default.
+ */
+$inst0 = 'prod';
+
 /** A cell's chip class — purple for the whole of a repo that is mid-release. */
 function cell_chip(?int $sev, string $repo, array $running): string
 {
@@ -302,6 +311,17 @@ function cell_chip(?int $sev, string $repo, array $running): string
   }
 
   * { box-sizing: border-box; }
+
+  /* THE `hidden` ATTRIBUTE HAS TO WIN, and on this page it kept losing. The
+     UA's rule is `[hidden] { display: none }` at the lowest specificity, so
+     any class that sets `display` beats it — which is how the KPI strip
+     (`.kpi { display: flex }`) stayed on screen through every instance the
+     picker could choose, while the tables beside it, which set no display,
+     hid correctly. Half a page filtering is worse than none: the numbers
+     looked like they belonged to the instance that was selected.
+     One global rule, so the next element to grow a `display` cannot bring
+     the bug back. */
+  [hidden] { display: none !important; }
 
   body {
     margin: 0;
@@ -670,22 +690,28 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .usage-table th:first-child, .usage-table td:first-child { padding-left: 18px; }
   .usage-table th:last-child, .usage-table td:last-child { padding-right: 18px; }
   .usage-table col.who  { width: 150px; }
-  .usage-table col.addr { width: 128px; }
+  /* Wide enough for "1,229 addresses" and for an address wearing a "+2" —
+     at 128px both ended in an ellipsis, which on a column of numbers reads as
+     a truncated number rather than a truncated label. */
+  .usage-table col.addr { width: 158px; }
   .usage-table col.loc  { width: auto; }
   .usage-table col.n    { width: 68px; }
   .usage-table col.seen { width: 128px; }
   .usage-table .mono { font-family: var(--font-mono); font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .usage-table .unloc { opacity: 0.55; }
 
-  /* The anon group: one summary row, its members hidden until asked for. */
-  .anon-toggle {
+  /* The anonymous row: one line for the crowd, its busiest addresses folded
+     underneath until somebody asks for them. */
+  .agg-toggle {
     display: inline-flex; align-items: center; gap: 8px; font: inherit;
     background: none; border: 0; color: inherit; cursor: pointer; padding: 0;
   }
-  .anon-toggle .caret { display: inline-block; transition: transform 0.12s; color: var(--ink-faint); }
-  .anon-toggle[aria-expanded="true"] .caret { transform: rotate(90deg); }
-  .anon-summary td { background: var(--surface-alt); }
-  .anon-row td:first-child { padding-left: 34px; }
+  .agg-toggle .caret { display: inline-block; transition: transform 0.12s; color: var(--ink-faint); }
+  .agg-toggle[aria-expanded="true"] .caret { transform: rotate(90deg); }
+  .agg-row td { background: var(--surface-alt); }
+  .addr-row td { background: var(--bg); }
+  .addr-row td:first-child { padding-left: 34px; }
+  .addr-more td { padding-left: 34px; color: var(--ink-faint); font-size: 0.76rem; }
   .usage-table tr:last-child td { border-bottom: none; }
   .usage-table thead th {
     font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.08em;
@@ -703,9 +729,6 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .who-ip { display: block; margin-top: 3px; font-family: var(--font-mono); font-size: 0.66rem; color: var(--ink-faint); }
   .usage-legend { border-top: none; border-radius: 12px; }
   .app-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  /* display:flex beats the UA's [hidden]{display:none}, so the picker showed
-     on every tab despite carrying the attribute. */
-  .app-pick[hidden] { display: none; }
   .app-n { margin-left: 7px; font-family: var(--font-mono); font-size: 0.66rem; opacity: 0.7; }
   tr.app-zero { opacity: 0.4; }
   .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
@@ -714,12 +737,16 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .inst-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .inst-label { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.08em;
                 text-transform: uppercase; color: var(--ink-faint); margin-right: 2px; }
-  .inst-tab {
+  /* The app picker wears the same pill, and used to wear the same CLASS —
+     which is how one `querySelectorAll('.inst-tab')` handler ended up wired to
+     both pickers. Same look, different name, so a selector can only ever mean
+     one of them. */
+  .inst-tab, .app-tab {
     font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--ink-faint);
     background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
   }
-  .inst-tab:hover { color: var(--ink-soft); border-color: var(--ink-soft); }
-  .inst-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .inst-tab:hover, .app-tab:hover { color: var(--ink-soft); border-color: var(--ink-soft); }
+  .inst-tab.on, .app-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
   .web-cell { display: none; }
   .web-cell.on { display: inline; }
 
@@ -846,13 +873,18 @@ function cell_chip(?int $sev, string $repo, array $running): string
   <?php // WHICH APP the Usage numbers are about — Sean, 2026-08-23: "usage
         // should be split by app or website .. put selector buttons for what
         // usage is being tracked below the seancheren.com, test.seancheren.com
-        // etc buttons". Only meaningful on Usage, so it shows with that tab. ?>
+        // etc buttons". Only meaningful on Usage, so it shows with that tab.
+        //
+        // The count on each pill is THIS INSTANCE'S, rewritten when the
+        // instance changes. It used to be the host-wide number, so picking the
+        // dev sandbox left a row of pills reporting production's traffic
+        // directly above tables that had correctly narrowed to dev. ?>
   <div class="app-pick" id="app-pick" hidden>
-    <button class="inst-tab on" data-app="*">All apps</button>
+    <button class="app-tab on" data-app="*" title="Every app on this instance">All apps<span class="app-n"></span></button>
     <?php // $USAGE_DATA, not $usage — the Usage tab assigns $usage further down
           // the page, so up here it was undefined and this list came out empty. ?>
-    <?php foreach (($USAGE_DATA['apps'] ?? []) as $appName => $c): ?>
-      <button class="inst-tab" data-app="<?= e($appName) ?>"><?= e($appName) ?><span class="app-n"><?= (int) ($c['3d'] ?? 0) ?></span></button>
+    <?php foreach (($USAGE_DATA['app_order'] ?? []) as $appName): ?>
+      <button class="app-tab" data-app="<?= e($appName) ?>" title="Requests in the last 3 days, on the selected instance"><?= e($appName) ?><span class="app-n"><?= (int) ($USAGE_DATA['apps']['prod'][$appName]['3d'] ?? 0) ?></span></button>
     <?php endforeach; ?>
   </div>
 
@@ -868,12 +900,35 @@ function cell_chip(?int $sev, string $repo, array $running): string
       foreach ($rowset as $u => $rr) { if (is_array($rr)) { $byUrl[$u] = $rr; } }
   }
   ?>
+  <?php
+  /**
+   * COUNTED FROM THE MATRIX, never typed. Every number here used to be a
+   * literal in the markup — "6 Mind-suite repos", "2 apps syncing through a
+   * server", "4 / 4 on Android" — sitting directly above the table that could
+   * contradict them, and one already had: three repos reach the API, not two.
+   * A headline that has to be re-typed when a row changes is a headline that
+   * goes quietly wrong. The one figure that is not in the matrix, because it
+   * is a fact about Apple rather than about this code, is IOS_FREE_SLOTS.
+   */
+  $inGroup  = fn(string $g) => count(array_filter($repos, fn($r) => $r['group'] === $g));
+  $ofKind   = fn(string $k) => count(array_filter($repos, fn($r) => ($r['sync_kind'] ?? 'none') === $k));
+  /** Repos with a cell on this platform at all, and how many of those are live. */
+  $onPlat   = function (string $plat, array $sevs) use ($repos) {
+      $has = array_filter($repos, fn($r) => ($r['plat'][$plat][0] ?? null) !== null);
+      return [count(array_filter($has, fn($r) => in_array($r['plat'][$plat][0], $sevs, true))), count($has)];
+  };
+  [$androidOk, $androidAll] = $onPlat('android', [0]);
+  // A slot is spent by a build that is ON the phone — installed (0) or built
+  // this release (SEV_BUILT). A repo that deliberately only compiles for iOS
+  // is not occupying one, which is the whole distinction severity 1 records.
+  $slots = count(array_filter($repos, fn($r) => in_array($r['plat']['ios'][0] ?? null, [0, SEV_BUILT], true)));
+  ?>
   <div class="kpis">
-    <div class="kpi"><span class="n">6</span><span class="l">Mind-suite repos &middot; 2 developer &middot; 2 website</span></div>
-    <div class="kpi"><span class="n">2</span><span class="l">apps syncing through a server</span></div>
-    <div class="kpi"><span class="n">1</span><span class="l">app syncing local-only, via Bonjour</span></div>
-    <div class="kpi"><span class="n">4 / 4</span><span class="l">apps building &amp; running on Android</span></div>
-    <div class="kpi"><span class="n">3 / 3</span><span class="l">phone slots spent (free-tier cap)</span></div>
+    <div class="kpi"><span class="n"><?= $inGroup('mindsuite') ?></span><span class="l">MindSuite repos &middot; <?= $inGroup('developer') ?> developer &middot; <?= $inGroup('website') ?> website</span></div>
+    <div class="kpi"><span class="n"><?= $ofKind('server') ?></span><span class="l">apps syncing through a server<?= $ofKind('login') ? ' &middot; ' . $ofKind('login') . ' signing in to one' : '' ?></span></div>
+    <div class="kpi"><span class="n"><?= $ofKind('local') ?></span><span class="l">app<?= $ofKind('local') === 1 ? '' : 's' ?> syncing local-only, via Bonjour</span></div>
+    <div class="kpi"><span class="n"><?= $androidOk ?> / <?= $androidAll ?></span><span class="l">apps building &amp; running on Android</span></div>
+    <div class="kpi"><span class="n"><?= $slots ?> / <?= IOS_FREE_SLOTS ?></span><span class="l">phone slots spent (free-tier cap)</span></div>
   </div>
 
   <?php
@@ -889,16 +944,26 @@ function cell_chip(?int $sev, string $repo, array $running): string
    * by a subsection in the mindsuite current page". A repo that serves a URL
    * and one that ships nothing to a server are different kinds of thing, and
    * reading CoreMind's row of n/a beside CalMind's live one invited the
-   * question every time. "Deployed" here means exactly what the Web / server
-   * column measures on the SELECTED instance: a URL this page probes.
+   * question every time.
+   *
+   * "Deployed" means what the Web / server column beside it measures ON THE
+   * SELECTED INSTANCE: a URL this page probes. It used to mean "on any
+   * instance", which the comment already claimed it did not — so picking dev
+   * left CalMind under a heading reading "Deployed" with a cell beside it
+   * reading "not deployed". Each row carries the instances it ships to and
+   * showInstance() re-buckets them; the server lays them out for production,
+   * the picker's own default.
    */
+  $deployAt = function (array $r) use ($WEB_INSTANCES, $WEB_PROBE_AT) {
+      $at = [];
+      foreach (array_keys($WEB_INSTANCES) as $inst) {
+          if (!empty($WEB_PROBE_AT[$inst][$r['name']])) { $at[] = $inst; }
+      }
+      return $at;
+  };
   $split = ['Deployed' => [], 'Not deployed' => []];
   foreach ($rows as $r) {
-      $anyWeb = false;
-      foreach ($WEB_INSTANCES as $inst => $host) {
-          if (!empty($WEB_PROBE_AT[$inst][$r['name']])) { $anyWeb = true; break; }
-      }
-      $split[$anyWeb ? 'Deployed' : 'Not deployed'][] = $r;
+      $split[in_array($inst0, $deployAt($r), true) ? 'Deployed' : 'Not deployed'][] = $r;
   }
   ?>
   <div class="table-card">
@@ -906,8 +971,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
       <h2><?= e($gname) ?></h2>
       <p><?= e($gdek) ?></p>
     </div>
-    <?php foreach ($split as $subName => $subRows): if (!$subRows) { continue; } ?>
-    <div class="sec">
+    <?php // Both subsections are always rendered — an empty one hides itself —
+          // because the picker moves rows between them and a section that was
+          // never in the DOM has nowhere to put them. ?>
+    <?php foreach ($split as $subName => $subRows): ?>
+    <div class="sec" data-deploy-sec="<?= $subName === 'Deployed' ? 'yes' : 'no' ?>"<?= $subRows ? '' : ' hidden' ?>>
       <div class="sec-head"><?= e($subName) ?><span class="sec-count"><?= count($subRows) ?></span></div>
     <div class="table-scroll">
       <table>
@@ -927,7 +995,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         </thead>
         <tbody>
           <?php foreach ($subRows as $r): ?>
-            <tr data-live="repo:<?= e($r['name']) ?>"<?= $gkey === 'mindsuite' ? '' : ' class="outside"' ?>>
+            <tr data-live="repo:<?= e($r['name']) ?>" data-deploy-at="<?= e(implode(' ', $deployAt($r))) ?>"<?= $gkey === 'mindsuite' ? '' : ' class="outside"' ?>>
               <td>
                 <span class="repo-name"><?= e($r['name']) ?></span>
                 <span class="repo-tag"><?= isset($RUNNING[$r['name']])
@@ -1046,7 +1114,13 @@ function cell_chip(?int $sev, string $repo, array $running): string
           if ($r['group'] !== $gkey) { continue; }
           $pl = [];
           foreach (array_keys($PLATFORMS) as $plat) {
-              if (isset($everReal[$r['name'] . '.' . $plat])) { $pl[] = $plat; }
+              // Web is recorded per instance, so a repo that lives only on a
+              // sandbox still earns the line — asking about production's key
+              // alone would have left its pane without one.
+              $keys = $plat === 'web'
+                  ? array_map(fn($i) => status_sample_key($r['name'], 'web', $i), array_keys($WEB_INSTANCES))
+                  : [status_sample_key($r['name'], $plat)];
+              foreach ($keys as $k) { if (isset($everReal[$k])) { $pl[] = $plat; break; } }
           }
           if ($pl) { $panes[$r['name']] = ['group' => $gname, 'plats' => $pl]; }
       }
@@ -1057,6 +1131,21 @@ function cell_chip(?int $sev, string $repo, array $running): string
         't' => (int) $x['ts'], 'u' => (int) ($x['until'] ?? $x['ts']), 's' => $x['s'] ?? [],
     ], $samples)) ?>;
     const PLATFORMS = <?= json_encode($PLATFORMS) ?>;
+    /**
+     * WHICH SAMPLE A PLATFORM READS, and the one place it is decided —
+     * status_sample_key() in PHP writes exactly this. Web is the only platform
+     * whose answer differs per instance, so it carries the instance; every
+     * other platform is a device and has one answer for all three. Production
+     * keeps the bare key, so every sample recorded before this stayed readable
+     * rather than becoming a gap in the middle of the chart.
+     *
+     * Without it the History tab's web line was production's whichever button
+     * was lit — a chart drawn under a picker it did not obey.
+     */
+    const sampleKey = (repo, plat) => {
+      const inst = (document.querySelector('.inst-pick .inst-tab.on') || { dataset: {} }).dataset.inst || 'prod';
+      return repo + '.' + plat + (plat === 'web' && inst !== 'prod' ? '@' + inst : '');
+    };
     // THE Y AXIS, top to bottom, each in the colour the legend uses for it.
     // `releasing` is above `fine` because it is not a degree of broken, and
     // `n/a` is below everything because it is not on the scale at all.
@@ -1313,7 +1402,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         }
 
         // Only the samples that say anything about this repo's chosen platforms.
-        const mine = SAMPLES.filter(s => s.u >= t0 && s.t <= t1 && plats.some(p => (repo + '.' + p) in s.s));
+        const mine = SAMPLES.filter(s => s.u >= t0 && s.t <= t1 && plats.some(p => sampleKey(repo, p) in s.s));
         if (!plats.length || !mine.length) {
           svg.innerHTML = out;
           card.querySelector('.ax-from').textContent = fmtT(t0);
@@ -1326,7 +1415,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
         // Who is where, at each sample.
         const at = mine.map((s) => {
           const m = {};
-          plats.forEach(p => { const k = repo + '.' + p; if (k in s.s) { m[p] = s.s[k]; } });
+          plats.forEach(p => { const k = sampleKey(repo, p); if (k in s.s) { m[p] = s.s[k]; } });
           return m;
         });
         // …and the same, folded into groups: state -> the platforms in it.
@@ -1600,12 +1689,18 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   <?php // Hits, from lib/hitlog.php — every page on this host writes one line
         // per request into one log, so this counts the whole site rather than
-        // whichever app happened to have logging wired up. ?>
+        // whichever app happened to have logging wired up.
+        //
+        // Per instance, because the picker above claims to scope the page: a
+        // strip that answered "the whole host" while sitting under a chosen
+        // sandbox was read as that sandbox's traffic. The numbers for all
+        // three ride along and the picker swaps them. ?>
   <div class="kpis" data-live="hits" style="margin-bottom:22px">
     <?php foreach ($hits as $label => $h): ?>
-      <div class="kpi">
-        <span class="n"><?= number_format($h['hits']) ?></span>
-        <span class="l">hits in <?= e($label) ?><?= $h['people'] ? ' &middot; ' . $h['people'] . ' signed in' : '' ?></span>
+      <div class="kpi" data-hits="<?= e(json_encode($h['by_inst'])) ?>">
+        <span class="n"><?= number_format($h['by_inst']['prod']['hits'] ?? 0) ?></span>
+        <span class="l">hits in <?= e($label) ?><span class="who"><?= ($h['by_inst']['prod']['people'] ?? 0)
+            ? ' &middot; ' . (int) $h['by_inst']['prod']['people'] . ' signed in' : '' ?></span></span>
       </div>
     <?php endforeach; ?>
   </div>
@@ -1747,12 +1842,32 @@ function cell_chip(?int $sev, string $repo, array $running): string
   $laneDek  = [
       'sean'    => 'production, signed in as sean',
       'other'   => 'production, anybody else — signed in or not',
-      'claudio' => "Claude's own requests, any instance",
+      'claudio' => "Claude's own requests, on the selected instance",
       'test'    => 'the test.seancheren.com sandbox',
       'dev'     => 'the dev.seancheren.com sandbox',
   ];
-  // Which instance's traffic a lane is — 'all' survives every picker choice.
+  // Which instance's traffic a lane is. Every lane but Claude's IS an
+  // instance, so the picker hides the card outright; Claude hits all three, so
+  // that card stays and its ROWS narrow instead ('all' survives every choice).
   $laneInst = ['sean' => 'prod', 'other' => 'prod', 'claudio' => 'all', 'test' => 'test', 'dev' => 'dev'];
+  // Every number below is production's, because $inst0 is the picker's
+  // default; JS rewrites all of them the moment it is moved, through the one
+  // rule in usageTotal() / hit_usage_total().
+  /** The instance a lane's rows are read at, for the server's first paint. */
+  $laneAt = fn(string $lk) => $laneInst[$lk] === 'all' ? $inst0 : $laneInst[$lk];
+  /** Every window's count for one person, as the sortable/rewritable cells. */
+  $countCells = function (array $counts) use ($uw) {
+      foreach (array_keys($uw) as $wk) {
+          echo '<td class="num' . ($counts[$wk] ? '' : ' zero') . '" data-win="' . e($wk)
+             . '" data-sort="' . (int) $counts[$wk] . '">' . number_format($counts[$wk]) . '</td>';
+      }
+  };
+  /** A located label, or the honest offline classification, or a dash. */
+  $where = function (?string $geo, string $ip): string {
+      if ($geo !== null && $geo !== '' && $geo !== '-') { return e($geo); }
+      if ($ip !== '' && $ip !== '-') { return '<span class="unloc">' . e(hit_where($ip)) . '</span>'; }
+      return '&mdash;';
+  };
   ?>
 
   <?php // The log rotates once at 4 MB, so a long window can be reporting on a
@@ -1761,25 +1876,26 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   <div class="kpis" style="margin-bottom:6px">
     <?php foreach ($laneName as $lk => $ln): ?>
-      <div class="kpi" data-inst-only="<?= e($laneInst[$lk]) ?>">
-        <span class="n"><?= number_format($usage['lanes'][$lk]['3d'] ?? 0) ?></span>
-        <span class="l"><?= e($ln) ?> &middot; last 3 days</span>
+      <div class="kpi" data-inst-only="<?= e($laneInst[$lk]) ?>" data-kpi-lane="<?= e($lk) ?>">
+        <span class="n"><?= number_format(hit_usage_total($usage['people'], $lk, $laneAt($lk), '3d')) ?></span>
+        <span class="l"><?= e($ln) ?> &middot; <span class="kpi-app"></span>last 3 days</span>
       </div>
     <?php endforeach; ?>
   </div>
 
   <div data-live="usage-tables">
   <?php foreach ($laneName as $lk => $ln):
-    $rows = array_filter($usage['people'], fn($p) => $p['lane'] === $lk); ?>
+    $rows = array_filter($usage['people'], fn($p) => $p['lane'] === $lk);
+    // Visible on the server's first paint — the rest of this lane's rows are
+    // in the DOM too, carrying the instance they belong to.
+    $shown = array_filter($rows, fn($p) => $p['inst'] === $laneAt($lk)); ?>
     <div class="table-card" data-inst-only="<?= e($laneInst[$lk]) ?>">
       <div class="group-head">
         <h2><?= e($ln) ?></h2>
         <p><?= e($laneDek[$lk]) ?></p>
       </div>
-      <?php if (!$rows): ?>
-        <div class="usage-none">Nothing logged.</div>
-      <?php else: ?>
-      <div class="table-scroll">
+      <div class="usage-none"<?= $shown ? ' hidden' : '' ?>>Nothing logged.</div>
+      <div class="table-scroll"<?= $shown ? '' : ' hidden' ?>>
         <table class="usage-table">
           <colgroup>
             <col class="who"><col class="addr"><col class="loc">
@@ -1800,72 +1916,89 @@ function cell_chip(?int $sev, string $repo, array $running): string
           <tbody>
             <?php
             /**
-             * ANONYMOUS COLLAPSES TO ONE ROW — Sean, 2026-08-23: "make the
-             * anons grouped so i can collapse them into a summary row". Every
-             * unrecognised address is its own person, so a busy day turns the
-             * table into a wall of anon-N and buries the named accounts it
-             * exists to show. They sort to the bottom, behind one summary row
-             * that carries their totals; the summary is the default view and
-             * the detail is one click away.
+             * ANONYMOUS IS ONE ROW — Sean, 2026-09-03: "group together
+             * anonymous requests, don't list hundreds of anon-xxxx".
+             *
+             * The aggregating happens in hit_usage(), not here, so the chart,
+             * the headline numbers and this table are all counting the same
+             * thing. What is left for the page is a caret: the busiest dozen
+             * addresses fold out underneath, which is the part of that wall
+             * anybody actually reads, and the count says how many were left in
+             * the drawer.
              */
-            $anonRows = array_filter($rows, fn($p) => strncmp($p['name'], 'anon', 4) === 0);
-            $namedRows = array_filter($rows, fn($p) => strncmp($p['name'], 'anon', 4) !== 0);
-            $anonTot = array_fill_keys(array_keys($uw), 0);
-            $anonLast = 0;
-            foreach ($anonRows as $p) {
-                foreach (array_keys($uw) as $wk) { $anonTot[$wk] += $p['counts'][$wk]; }
-                $anonLast = max($anonLast, $p['last']);
-            }
+            foreach ($rows as $rk => $p):
+              $anon = !empty($p['anon']);
+              $ip = (string) ($p['ip'] ?? '');
+              $extra = max(0, (int) $p['addresses'] - count($p['top']));
+              $openable = count($p['top']) > 1;
             ?>
-            <?php if ($anonRows): ?>
-              <tr class="anon-summary" data-anon-group="<?= e($lk) ?>">
-                <td>
-                  <button type="button" class="anon-toggle" aria-expanded="false">
-                    <span class="caret">&#9656;</span>
-                    <span class="usage-dot out"></span>
-                    <span class="repo-name"><?= count($anonRows) ?> anonymous</span>
-                  </button>
-                </td>
-                <td class="mono soft"><?= count($anonRows) ?> address<?= count($anonRows) === 1 ? '' : 'es' ?></td>
-                <td class="mono soft">&mdash;</td>
-                <?php foreach (array_keys($uw) as $wk): ?>
-                  <td class="num<?= $anonTot[$wk] ? '' : ' zero' ?>" data-anon-win="<?= e($wk) ?>"><?= number_format($anonTot[$wk]) ?></td>
-                <?php endforeach; ?>
-                <td class="num soft"><?= $anonLast ? e(ctFull($anonLast)) : '&mdash;' ?></td>
-              </tr>
-            <?php endif; ?>
-            <?php foreach (array_merge($namedRows, $anonRows) as $rk => $p): $anon = strncmp($p['name'], 'anon', 4) === 0; ?>
-              <tr data-key="<?= e($rk) ?>"<?= $anon ? ' class="anon-row" data-anon-of="' . e($lk) . '" hidden' : '' ?>>
+              <tr data-key="<?= e($rk) ?>" data-inst="<?= e($p['inst']) ?>"
+                  class="<?= $anon ? 'agg-row' : '' ?>"<?= $p['inst'] === $laneAt($lk) ? '' : ' hidden' ?>>
                 <?php // THREE states, because there are three. Orange: traffic
                       // with no session behind it. Green: an account that has
                       // actually signed in. Grey: an account that exists and
                       // has never been seen — a green dot on those claimed
                       // they were signed in, which they never have been. ?>
-                <td<?= $anon ? ' title="Requests with no session — public pages, the login wall, and anyone browsing signed out. Numbered per address, in the order first seen."' : '' ?>>
-                  <span class="usage-dot <?= $anon ? 'out' : ($p['last'] ? 'in' : 'never') ?>"></span>
-                  <span class="repo-name"><?= e($p['name']) ?></span>
+                <td<?= $anon ? ' title="Requests with no session — public pages, the login wall, and anyone browsing signed out. One row for all of them; open it for the busiest addresses."' : '' ?>>
+                  <?php if ($openable): ?>
+                    <button type="button" class="agg-toggle" aria-expanded="false">
+                      <span class="caret">&#9656;</span>
+                      <span class="usage-dot <?= $anon ? 'out' : ($p['last'] ? 'in' : 'never') ?>"></span>
+                      <span class="repo-name"><?= e($p['name']) ?></span>
+                    </button>
+                  <?php else: ?>
+                    <span class="usage-dot <?= $anon ? 'out' : ($p['last'] ? 'in' : 'never') ?>"></span>
+                    <span class="repo-name"><?= e($p['name']) ?></span>
+                  <?php endif; ?>
                 </td>
                 <?php // ADDRESS AND LOCATION are their own columns so each can
                       // be sorted — under the name they could only be read one
                       // row at a time. The location is whatever geoip.php's
                       // cache holds; the offline class is the fallback, and it
-                      // is honest about being one. ?>
-                <td class="mono"><?= e($p['ip'] ?? '') ?: '&mdash;' ?></td>
-                <td class="mono soft"><?= !empty($p['geo']) && $p['geo'] !== '-'
-                    ? e($p['geo'])
-                    : (!empty($p['ip']) ? '<span class="unloc">' . e(hit_where($p['ip'])) . '</span>' : '&mdash;') ?></td>
-                <?php foreach (array_keys($uw) as $wk): ?>
-                  <td class="num<?= $p['counts'][$wk] ? '' : ' zero' ?>" data-win="<?= e($wk) ?>"><?= number_format($p['counts'][$wk]) ?></td>
-                <?php endforeach; ?>
+                      // is honest about being one.
+                      //
+                      // The aggregate counts addresses instead of naming one,
+                      // and says nothing about location: a thousand visitors
+                      // are not in a place. ?>
+                <td class="mono<?= $anon ? ' soft' : '' ?>" data-addr data-sort="<?= $anon ? (int) $p['addresses'] : e($ip) ?>"><?php
+                  if ($anon) {
+                      echo '<span class="addr-n">' . number_format((int) $p['addresses']) . '</span> address'
+                         . ((int) $p['addresses'] === 1 ? '' : 'es');
+                  } else {
+                      echo $ip !== '' ? e($ip) : '&mdash;';
+                      if ((int) $p['addresses'] > 1) { echo '<span class="app-n" title="addresses seen for this account">+' . ((int) $p['addresses'] - 1) . '</span>'; }
+                  }
+                ?></td>
+                <td class="mono soft"><?= $anon ? '&mdash;' : $where($p['geo'] ?? null, $ip) ?></td>
+                <?php $countCells($p['counts']); ?>
                 <?php // An account with no traffic has no last-seen — a
                       // formatted epoch-zero would read as 1969. ?>
-                <td class="num soft"><?= $p['last'] ? e(ctFull($p['last'])) : '&mdash;' ?></td>
+                <td class="num soft" data-sort="<?= (int) $p['last'] ?>"><?= $p['last'] ? e(ctFull($p['last'])) : '&mdash;' ?></td>
               </tr>
+              <?php if ($openable): foreach ($p['top'] as $t): $tip = (string) $t['ip']; ?>
+                <?php // The address sits in the ACCOUNT column, because for a
+                      // visitor with no session the address is the only
+                      // identity there is. Its own Address cell is left blank
+                      // rather than dashed — a dash in a column of real values
+                      // reads as a fact that went missing. ?>
+                <tr class="addr-row" data-of="<?= e($rk) ?>" data-addr-ip="<?= e($tip) ?>" hidden>
+                  <td class="mono"><?= $tip === '-' ? '<span class="unloc">no address recorded</span>' : e($tip) ?></td>
+                  <td></td>
+                  <td class="mono soft"><?= $where($t['geo'] ?? null, $tip) ?></td>
+                  <?php $countCells($t['counts']); ?>
+                  <td class="num soft" data-sort="<?= (int) $t['last'] ?>"><?= $t['last'] ? e(ctFull($t['last'])) : '&mdash;' ?></td>
+                </tr>
+              <?php endforeach; ?>
+                <?php if ($extra): ?>
+                  <tr class="addr-more" data-of="<?= e($rk) ?>" hidden>
+                    <td colspan="<?= count($uw) + 4 ?>">and <?= number_format($extra) ?> more address<?= $extra === 1 ? '' : 'es' ?>, each quieter than these</td>
+                  </tr>
+                <?php endif; ?>
+              <?php endif; ?>
             <?php endforeach; ?>
           </tbody>
         </table>
       </div>
-      <?php endif; ?>
     </div>
   <?php endforeach; ?>
 
@@ -1873,7 +2006,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
   <div class="legend usage-legend">
     <div class="legend-item"><span class="usage-dot in"></span> signed in at least once</div>
-    <div class="legend-item"><span class="usage-dot out"></span> anonymous — no session; numbered per address</div>
+    <div class="legend-item"><span class="usage-dot out"></span> anonymous — no session, grouped into one row per lane</div>
     <div class="legend-item"><span class="usage-dot never"></span> account exists, never seen</div>
   </div>
 
@@ -1894,21 +2027,64 @@ function cell_chip(?int $sev, string $repo, array $running): string
     <div class="graph-key"></div>
   </div>
 
+  <?php
+  /**
+   * THE NUMBERS, SHIPPED ONCE. In a data-live region, so the 20-second poll
+   * refreshes them the same way it refreshes the tables — the chart used to be
+   * frozen at whatever the page loaded with, on a page whose headline claim is
+   * that it updates without reloading.
+   *
+   * A <script type="application/json"> is inert: swapping its text does not
+   * execute anything, which is exactly what the poller does to every other
+   * data-live element.
+   */
+  ?>
+  <script type="application/json" id="usage-data" data-live="usage-data"><?= json_encode([
+      'windows' => $uw,
+      'series'  => $usage['series'],
+      'buckets' => $usage['buckets'],   // how many buckets each window has
+      'apps'    => $usage['apps'],      // [instance][app][window], for the picker's counts
+      // people: everything the table and the headline rewrite themselves from.
+      'people'  => array_map(fn($p) => [
+          'name' => $p['name'], 'lane' => $p['lane'], 'inst' => $p['inst'], 'anon' => (bool) $p['anon'],
+          'counts' => $p['counts'], 'apps' => $p['apps'] ?? [],
+          'addresses' => (int) $p['addresses'], 'addr_apps' => $p['addr_apps'] ?? [],
+          // The folded-out addresses, keyed so a row can find its own numbers.
+          'top' => array_column(array_map(fn($t) => ['ip' => $t['ip'], 'counts' => $t['counts'], 'apps' => $t['apps']], $p['top']), null, 'ip'),
+      ], $usage['people']),
+      'now'     => $usage['now'],
+  ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+
   <script>
-    const USAGE = <?= json_encode([
-        'windows' => $uw,
-        'series'  => $usage['series'],
-        'buckets' => $usage['buckets'],   // how many buckets each window has
-        // apps: the per-app counts the table rewrites itself from.
-        'people'  => array_map(fn($p) => ['name' => $p['name'], 'lane' => $p['lane'],
-                                          'counts' => $p['counts'], 'apps' => $p['apps'] ?? []], $usage['people']),
-        'now'     => $usage['now'],
-    ]) ?>;
+    let USAGE = JSON.parse(document.getElementById('usage-data').textContent);
     // A colour per ACCOUNT, stable across every window so switching the span
     // does not repaint who is who.
     const USAGE_COLORS = ['#5fb6ac','#f0b429','#8fa3e0','#d98cc0','#9ad17a','#e08a5f','#c58ef0','#6fd0d8','#e2725b','#b9c86a'];
-    const UCOLOR = {};
-    Object.keys(USAGE.people).forEach((k, i) => { UCOLOR[k] = USAGE_COLORS[i % USAGE_COLORS.length]; });
+    let UCOLOR = {};
+    function usageColors() {
+      UCOLOR = {};
+      Object.keys(USAGE.people).forEach((k, i) => { UCOLOR[k] = USAGE_COLORS[i % USAGE_COLORS.length]; });
+    }
+    usageColors();
+
+    /** Which instance and which app every number below is about. */
+    const usageInst = () => (document.querySelector('.inst-pick .inst-tab.on') || { dataset: {} }).dataset.inst || 'prod';
+    const usageApp  = () => (document.querySelector('#app-pick .app-tab.on') || { dataset: {} }).dataset.app || '*';
+    /** One person's count for a window, under the chosen app. */
+    const personN = (p, wk, app) => (app === '*' ? (p.counts[wk] || 0) : (((p.apps || {})[app] || {})[wk] || 0));
+    /**
+     * The same rule hit_usage_total() applies in PHP, and the only place a
+     * total is worked out here. Two of these drifting apart is how the lane
+     * headline came to disagree with the rows underneath it.
+     */
+    function usageTotal(lane, inst, wk, app) {
+      let n = 0;
+      Object.keys(USAGE.people).forEach((k) => {
+        const p = USAGE.people[k];
+        if (p.lane === lane && p.inst === inst) { n += personN(p, wk, app); }
+      });
+      return n;
+    }
 
     function drawUsage() {
       const card = document.getElementById('usage-chart');
@@ -1920,11 +2096,16 @@ function cell_chip(?int $sev, string $repo, array $running): string
       // in here, for the one app being drawn. "*" sums every app.
       const n0 = USAGE.buckets[wk];
       const byApp = USAGE.series[wk] || {};
-      const app = (document.querySelector('#app-pick .inst-tab.on') || { dataset: {} }).dataset.app || '*';
+      const app = usageApp();
+      // …and only the instance that is selected. The chart drew every lane on
+      // every instance, so picking a sandbox left production's traffic on the
+      // plot under tables that had correctly narrowed to the sandbox.
+      const inst = usageInst();
       const rows = {};
       Object.keys(byApp).forEach((a) => {
         if (app !== '*' && a !== app) { return; }
         Object.keys(byApp[a]).forEach((k) => {
+          if (!USAGE.people[k] || USAGE.people[k].inst !== inst) { return; }
           if (!rows[k]) { rows[k] = new Array(n0).fill(0); }
           Object.keys(byApp[a][k]).forEach((b) => { rows[k][+b] += byApp[a][k][b]; });
         });
@@ -2009,51 +2190,112 @@ function cell_chip(?int $sev, string $repo, array $running): string
       drawUsage();
     }));
 
+    /** One number, written into a cell the same way everywhere. */
+    function setNum(td, v) {
+      td.textContent = v.toLocaleString();
+      td.dataset.sort = v;                 // the sorter reads this, not the commas
+      td.classList.toggle('zero', v === 0);
+    }
+
     /**
-     * THE APP FILTER rewrites the table's numbers in place rather than
-     * reloading: every person's per-app counts are already here. A row with
-     * nothing in the chosen app dims rather than vanishing — an account that
-     * has never touched CalMind is a fact worth seeing, not a gap.
+     * EVERYTHING ON THIS TAB, FROM ONE CHOICE. The instance picker and the app
+     * picker each used to rewrite their own half of the page, so the halves
+     * disagreed: the lane headlines never moved off production, the app pills
+     * counted every instance at once, and an app chosen before a poll was
+     * silently un-applied when the poll replaced the table.
+     *
+     * So there is one pass, and every caller is this function. It decides:
+     * which rows exist, what every count says, what each headline says, what
+     * the pills claim, and what the chart draws.
      */
-    function applyApp() {
-      const app = (document.querySelector('#app-pick .inst-tab.on') || { dataset: {} }).dataset.app || '*';
-      document.querySelectorAll('#tab-usage .usage-table tbody tr').forEach((tr) => {
+    function applyUsage() {
+      const inst = usageInst(), app = usageApp();
+
+      // The pills: this instance's counts, over three days.
+      const appsHere = (USAGE.apps || {})[inst] || {};
+      document.querySelectorAll('#app-pick .app-tab').forEach((b) => {
+        const n = b.querySelector('.app-n');
+        if (!n) { return; }
+        const a = b.dataset.app;
+        if (a === '*') {
+          let t = 0;
+          Object.keys(appsHere).forEach(k => { t += appsHere[k]['3d'] || 0; });
+          n.textContent = t.toLocaleString();
+        } else {
+          n.textContent = ((appsHere[a] || {})['3d'] || 0).toLocaleString();
+        }
+      });
+
+      // The rows: this instance's, with this app's numbers.
+      document.querySelectorAll('#tab-usage .usage-table tbody tr[data-key]').forEach((tr) => {
         const p = USAGE.people[tr.dataset.key];
         if (!p) { return; }
+        tr.hidden = p.inst !== inst;
         let total = 0;
         tr.querySelectorAll('td.num[data-win]').forEach((td) => {
-          const wk = td.dataset.win;
-          const v = app === '*' ? (p.counts[wk] || 0) : (((p.apps || {})[app] || {})[wk] || 0);
+          const v = personN(p, td.dataset.win, app);
           total += v;
-          td.textContent = v.toLocaleString();
-          td.classList.toggle('zero', v === 0);
+          setNum(td, v);
         });
         tr.classList.toggle('app-zero', total === 0);
-      });
-      // …and the summary row, which is the sum of the rows it hides.
-      document.querySelectorAll('#tab-usage .anon-summary').forEach((sum) => {
-        const lane = sum.dataset.anonGroup;
-        const mine = [...document.querySelectorAll('.anon-row[data-anon-of="' + CSS.escape(lane) + '"]')];
-        sum.querySelectorAll('td[data-anon-win]').forEach((td) => {
-          const wk = td.dataset.anonWin;
-          let t = 0;
-          mine.forEach((tr) => {
-            const p = USAGE.people[tr.dataset.key];
-            if (!p) { return; }
-            t += app === '*' ? (p.counts[wk] || 0) : (((p.apps || {})[app] || {})[wk] || 0);
+        // How many addresses, under this app — the aggregate's one non-count
+        // column, and it has to move with the rest or it reads as the total.
+        const addr = tr.querySelector('td[data-addr] .addr-n');
+        if (addr && p.anon) {
+          const n = app === '*' ? p.addresses : ((p.addr_apps || {})[app] || 0);
+          addr.textContent = n.toLocaleString();
+          addr.parentElement.dataset.sort = n;
+        }
+        // Its folded-out addresses follow it: same instance, same app, and
+        // never on screen while their parent row is off it.
+        document.querySelectorAll('#tab-usage tr[data-of="' + CSS.escape(tr.dataset.key) + '"]').forEach((sub) => {
+          const open = !tr.hidden && tr.querySelector('.agg-toggle')?.getAttribute('aria-expanded') === 'true';
+          const t = (p.top || {})[sub.dataset.addrIp || ''];
+          let n = 0;
+          sub.querySelectorAll('td.num[data-win]').forEach((td) => {
+            const v = !t ? 0 : (app === '*' ? (t.counts[td.dataset.win] || 0) : (((t.apps || {})[app] || {})[td.dataset.win] || 0));
+            n += v;
+            setNum(td, v);
           });
-          td.textContent = t.toLocaleString();
-          td.classList.toggle('zero', t === 0);
+          sub.classList.toggle('app-zero', n === 0 && !!t);
+          sub.hidden = !open;
         });
       });
+
+      // The lane headlines, and the empty state under each of them.
+      document.querySelectorAll('#tab-usage .kpi[data-kpi-lane]').forEach((kpi) => {
+        const lane = kpi.dataset.kpiLane;
+        kpi.querySelector('.n').textContent = usageTotal(lane, inst, '3d', app).toLocaleString();
+        const tag = kpi.querySelector('.kpi-app');
+        if (tag) { tag.textContent = app === '*' ? '' : app + ' · '; }
+      });
+      document.querySelectorAll('#tab-usage .table-card').forEach((card) => {
+        const any = [...card.querySelectorAll('tbody tr[data-key]')].some(tr => !tr.hidden);
+        const none = card.querySelector('.usage-none'), scroll = card.querySelector('.table-scroll');
+        if (none) { none.hidden = any; }
+        if (scroll) { scroll.hidden = !any; }
+      });
+
       drawUsage();
     }
-    document.querySelectorAll('#app-pick .inst-tab').forEach(b => b.addEventListener('click', () => {
-      document.querySelectorAll('#app-pick .inst-tab').forEach(o => o.classList.remove('on'));
+
+    document.querySelectorAll('#app-pick .app-tab').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('#app-pick .app-tab').forEach(o => o.classList.remove('on'));
       b.classList.add('on');
-      applyApp();
+      applyUsage();
     }));
-    drawUsage();
+
+    // A row's addresses fold out in place. Delegated, because the poller
+    // replaces the whole table.
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.agg-toggle');
+      if (!btn) { return; }
+      const tr = btn.closest('tr[data-key]');
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      document.querySelectorAll('#tab-usage tr[data-of="' + CSS.escape(tr.dataset.key) + '"]')
+        .forEach(sub => { sub.hidden = !open; });
+    });
   </script>
 
   </div>
@@ -2067,33 +2309,57 @@ function cell_chip(?int $sev, string $repo, array $running): string
   // was impossible. The hash carries it — which also makes a tab linkable,
   // and means the restore happens before first paint rather than as a visible
   // flick from Current to wherever you were.
-  // WHICH INSTANCE the Web / server column is talking about. Every instance's
-  // cell is in the DOM; this decides which one is visible.
+  // WHICH INSTANCE the whole page is talking about. Every instance's cell,
+  // block and row is in the DOM; this decides which one is on screen.
+  //
+  // SCOPED TO `.inst-pick`, and that scope is the whole bug this had. The app
+  // picker's pills wore the same class, so clicking one ran this with an
+  // undefined instance: `b.dataset.inst === undefined` was TRUE for every app
+  // pill and false for every instance pill, which lit the entire app row,
+  // unlit the instance row, and hid every block that was not marked 'all'.
   function showInstance(inst) {
-    document.querySelectorAll('.inst-tab').forEach(b => b.classList.toggle('on', b.dataset.inst === inst));
+    document.querySelectorAll('.inst-pick .inst-tab').forEach(b => b.classList.toggle('on', b.dataset.inst === inst));
     document.querySelectorAll('.web-cell').forEach(c => c.classList.toggle('on', c.dataset.inst === inst));
     // Whole blocks that belong to one instance — Live's domain sections,
-    // Usage's lane tables. 'all' survives every choice.
+    // Usage's lane cards. 'all' survives every choice.
     document.querySelectorAll('[data-inst-only]').forEach(el => {
       const want = el.dataset.instOnly;
       el.hidden = !(want === 'all' || want === inst);
     });
+    // The Current tab's Deployed / Not deployed split is about THIS instance,
+    // so the rows move between the two subsections rather than the headings
+    // being left to describe some other instance's deployment.
+    document.querySelectorAll('#tab-current .table-card').forEach(card => {
+      const secs = { yes: card.querySelector('[data-deploy-sec="yes"]'), no: card.querySelector('[data-deploy-sec="no"]') };
+      if (!secs.yes || !secs.no) { return; }
+      card.querySelectorAll('tr[data-deploy-at]').forEach(tr => {
+        const want = (tr.dataset.deployAt || '').split(' ').includes(inst) ? 'yes' : 'no';
+        const body = secs[want].querySelector('tbody');
+        if (body && tr.parentElement !== body) { body.appendChild(tr); }
+      });
+      Object.values(secs).forEach(sec => {
+        const n = sec.querySelectorAll('tbody tr').length;
+        sec.querySelector('.sec-count').textContent = n;
+        sec.hidden = n === 0;
+      });
+    });
+    // Live Status' hit counters carry all three instances' numbers.
+    document.querySelectorAll('.kpi[data-hits]').forEach(kpi => {
+      let by = {};
+      try { by = JSON.parse(kpi.dataset.hits) || {}; } catch (e) { return; }
+      const h = by[inst] || { hits: 0, people: 0 };
+      kpi.querySelector('.n').textContent = (h.hits || 0).toLocaleString();
+      const who = kpi.querySelector('.who');
+      if (who) { who.textContent = h.people ? ' · ' + h.people + ' signed in' : ''; }
+    });
+    if (typeof applyUsage === 'function') { applyUsage(); }
+    // History's web line is per instance too, so the charts are redrawn rather
+    // than left showing the instance that happened to be selected first.
+    if (typeof drawAll === 'function') { drawAll(); }
   }
-  document.querySelectorAll('.inst-tab').forEach(b =>
+  document.querySelectorAll('.inst-pick .inst-tab').forEach(b =>
     b.addEventListener('click', () => showInstance(b.dataset.inst)));
   showInstance('prod');
-
-  // The anon group expands in place. Hidden by default: the summary IS the
-  // view, and the detail is one click away rather than a wall of rows.
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.anon-toggle');
-    if (!btn) { return; }
-    const lane = btn.closest('.anon-summary').dataset.anonGroup;
-    const open = btn.getAttribute('aria-expanded') !== 'true';
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    document.querySelectorAll('.anon-row[data-anon-of="' + CSS.escape(lane) + '"]')
-      .forEach(tr => { tr.hidden = !open; });
-  });
 
   // The Current tables sort on a header click, same gesture as Live Status.
   // Delegated, because the live poller replaces rows wholesale.
@@ -2105,16 +2371,31 @@ function cell_chip(?int $sev, string $repo, array $running): string
     const dir = th.classList.contains('sorted-asc') ? -1 : 1;
     table.querySelectorAll('th').forEach(o => o.classList.remove('sorted-asc', 'sorted-desc'));
     th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
-    // The anon summary and its members are one unit and always sit last —
-    // sorting them in among the named accounts would scatter a group that
-    // exists to stay together.
-    const rows = [...body.querySelectorAll('tr')];
-    const group = rows.filter(r => r.classList.contains('anon-summary') || r.classList.contains('anon-row'));
-    rows.filter(r => !group.includes(r))
-      .sort((a, b) => dir * (a.children[col]?.textContent.trim() || '')
-        .localeCompare(b.children[col]?.textContent.trim() || '', undefined, { numeric: true }))
-      .forEach(tr => body.appendChild(tr));
-    group.forEach(tr => body.appendChild(tr));
+    /**
+     * SORT ON THE VALUE, not on what the value LOOKS like. Reading the cell's
+     * text put "1,204" before "749" (a numeric locale compare stops at the
+     * comma and sees 1 against 749) and sorted Last seen alphabetically, so
+     * April led September. Every cell that means a number now carries one in
+     * data-sort, and applyUsage keeps it in step when it rewrites the text.
+     */
+    const key = (row) => {
+      const cell = row.children[col];
+      if (!cell) { return ''; }
+      const v = cell.dataset.sort ?? cell.textContent.trim();
+      const n = Number(v);
+      return Number.isFinite(n) && v !== '' ? n : String(v).toLowerCase();
+    };
+    // A row's folded-out addresses travel with it, and anonymous stays last:
+    // it is one bucket standing in for a crowd, and sorting it in among the
+    // named accounts scatters the group it exists to hold together.
+    const rows = [...body.querySelectorAll('tr[data-key]')];
+    const kids = (tr) => [...body.querySelectorAll('tr[data-of="' + CSS.escape(tr.dataset.key || '') + '"]')];
+    rows.sort((a, b) => {
+      const aggA = a.classList.contains('agg-row'), aggB = b.classList.contains('agg-row');
+      if (aggA !== aggB) { return aggA ? 1 : -1; }
+      const x = key(a), y = key(b);
+      return (x > y ? 1 : x < y ? -1 : 0) * dir;
+    }).forEach((tr) => { body.appendChild(tr); kids(tr).forEach(k => body.appendChild(k)); });
   });
 
   function showTab(name) {
@@ -2186,10 +2467,18 @@ function cell_chip(?int $sev, string $repo, array $running): string
       // this the dot stays green over a red table.
       if (here.className !== fresh.className) { here.className = fresh.className; }
     });
+    // The Usage numbers ride in their own data-live region, so a poll brings
+    // fresh ones; re-read them before anything is re-applied, or the tables
+    // and the chart spend twenty seconds disagreeing about the same minute.
+    const fresh = document.getElementById('usage-data');
+    if (fresh) {
+      try { USAGE = JSON.parse(fresh.textContent); usageColors(); } catch (e) { /* keep the last good payload */ }
+    }
     // The rows are replaced wholesale, so the chosen instance has to be
-    // re-applied — without this the Web / server column blanks on every poll.
-    const inst = document.querySelector('.inst-tab.on');
-    if (inst) { showInstance(inst.dataset.inst); }
+    // re-applied — without this the Web / server column blanks on every poll,
+    // and the chosen app was quietly dropped while its pill stayed lit.
+    const inst = document.querySelector('.inst-pick .inst-tab.on');
+    showInstance(inst ? inst.dataset.inst : 'prod');
     // The dek appears and disappears; it is a whole element, not a swap.
     const freshDek = doc.querySelector('header .dek');
     const hereDek = document.querySelector('header .dek');

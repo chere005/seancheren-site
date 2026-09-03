@@ -84,9 +84,30 @@ $REPO_GROUPS = [
  */
 const SEV_BUILT = 5;
 
+/**
+ * HOW MANY PHONES APPLE'S FREE TIER WILL SIGN AT ONCE. Not derivable from
+ * anything here — it is a fact about somebody else's rules — so it is named
+ * once rather than typed into a sentence on a page.
+ */
+const IOS_FREE_SLOTS = 3;
+
+/**
+ * `sync_kind` IS THE MACHINE-READABLE HALF of `sync`. The prose beside it is
+ * written for a person and says which endpoint and which space; the headline
+ * counts on the Current tab need the category, and were counting it by hand —
+ * "2 apps syncing through a server" was a sentence somebody typed, over a
+ * table that had grown a third app using the same API. A number that has to
+ * be re-typed when the table changes is a number that will be wrong.
+ *
+ *   server  its data lives on this host and syncs through the API
+ *   login   it authenticates against the API but keeps nothing of its own
+ *   local   peer-to-peer on the LAN, nothing server-side
+ *   none    no sync of any kind
+ */
 $repos = [
   ['name' => 'CalMind', 'group' => 'mindsuite', 'tag' => 'origin app',
    'sync' => '<code>seancheren.com/CalMind/api/index.php</code><br><code>records</code> space',
+   'sync_kind' => 'server',
    'plat' => [
      'web'     => [0, 'seancheren.com/CalMind'],
      'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/CalMind.app</span><br>Tauri &middot; Aug 22, 4:23 pm'],
@@ -97,6 +118,7 @@ $repos = [
    ]],
   ['name' => 'ChefMind', 'group' => 'mindsuite', 'tag' => 'split from CalMind',
    'sync' => '<code>seancheren.com/CalMind/api/index.php</code><br><code>chef</code> space',
+   'sync_kind' => 'server',
    'plat' => [
      'web'     => [0, 'seancheren.com/ChefMind'],
      'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/ChefMind.app</span><br>Tauri &middot; Aug 23, 12:46 am'],
@@ -107,6 +129,7 @@ $repos = [
    ]],
   ['name' => 'AcctMind', 'group' => 'mindsuite', 'tag' => 'separate build',
    'sync' => 'none — ledger in the browser',
+   'sync_kind' => 'none',
    'plat' => [
      'web'     => [0, 'seancheren.com/AcctMind'],
      'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/AcctMind.app</span><br>Tauri &middot; Aug 22, 4:25 pm'],
@@ -117,6 +140,7 @@ $repos = [
    ]],
   ['name' => 'MyCalMind', 'group' => 'mindsuite', 'tag' => 'extracted, renamed',
    'sync' => '<code>_calmind-local._tcp</code><br>Bonjour, LAN only',
+   'sync_kind' => 'local',
    'plat' => [
      'web'     => [null, 'none'],
      'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/MyCalMind.app</span><br>Catalyst &middot; Aug 22, 6:21 pm'],
@@ -127,6 +151,7 @@ $repos = [
    ]],
   ['name' => 'ReadMind', 'group' => 'mindsuite', 'tag' => 'cloned from the bookshelf',
    'sync' => '<code>seancheren.com/CalMind/api/index.php</code><br>login only — data stays server-side',
+   'sync_kind' => 'login',
    'plat' => [
      'web'     => [0, 'seancheren.com/ReadMind'],
      'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
@@ -134,6 +159,7 @@ $repos = [
    ]],
   ['name' => 'CoreMind', 'group' => 'mindsuite', 'tag' => 'shared tooling',
    'sync' => 'none',
+   'sync_kind' => 'none',
    'plat' => [
      'web' => [null, 'n/a'], 'macos' => [null, 'n/a'], 'windows' => [null, 'n/a'],
      'ios' => [null, 'n/a'], 'watchos' => [null, 'n/a'], 'android' => [null, 'n/a'],
@@ -141,12 +167,14 @@ $repos = [
 
   ['name' => 'AgentSuite', 'group' => 'developer', 'tag' => 'conventions',
    'sync' => 'none',
+   'sync_kind' => 'none',
    'plat' => [
      'web' => [null, 'none'], 'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
    ]],
   ['name' => 'LLMLOCAL', 'group' => 'developer', 'tag' => 'local models',
    'sync' => 'none',
+   'sync_kind' => 'none',
    'plat' => [
      'web' => [null, 'none'], 'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
@@ -154,6 +182,7 @@ $repos = [
 
   ['name' => 'seancheren-site', 'group' => 'website', 'tag' => 'hosting account',
    'sync' => 'none',
+   'sync_kind' => 'none',
    'plat' => [
      'web'     => [0, 'seancheren.com'],
      'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
@@ -161,6 +190,7 @@ $repos = [
    ]],
   ['name' => 'aki-tarot', 'group' => 'website', 'tag' => "Aki's, private",
    'sync' => 'none',
+   'sync_kind' => 'none',
    'plat' => [
      'web'     => [0, 'seancheren.com/akitarot'],
      'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
@@ -189,9 +219,12 @@ $repos = [
  * A repo absent from an instance is not a failure, it is an absence: the cell
  * says "not deployed" and the sample records n/a rather than a zero.
  */
-// dev is on the picker because the alias still exists; nothing is deployed
-// there since /dev/ was retired (2026-08-23), so every cell says so. The
-// button disappears the day the alias does.
+// THREE REAL INSTANCES. This block used to open "nothing is deployed there
+// since /dev/ was retired", two lines above a table that probes two URLs on
+// it — dev came back the same night it went, on 2026-08-23, with its own lib,
+// data and accounts. The repo's own AGENTS.md keeps that retirement on record
+// precisely because comments like this one survived a full day of work on the
+// file they contradicted.
 $WEB_INSTANCES = ['prod' => 'seancheren.com', 'test' => 'test.seancheren.com', 'dev' => 'dev.seancheren.com'];
 $WEB_PROBE_AT = [
     'prod' => [
@@ -232,8 +265,10 @@ $WEB_LABEL_AT = [
         'ReadMind' => 'dev.&#8203;seancheren.com/ReadMind',
     ],
 ];
-// Production stays the default everywhere else in this file, so nothing that
-// asks for "the" web status silently starts answering about the sandbox.
+// Production stays the default everywhere that asks for "the" web status
+// without naming an instance, so nothing silently starts answering about the
+// sandbox. Nothing reads it today — the samples record all three instances —
+// but the default belongs beside the table it is a default for.
 $WEB_PROBE = $WEB_PROBE_AT['prod'];
 
 // ------------------------------------------------------------- status samples
@@ -317,7 +352,23 @@ function status_running_repos(?array $latest): array
     return $out;
 }
 
-function status_sample_row(array $repos, array $webProbe, array $endpoints, array $results, array $running = []): array
+/**
+ * The sample key for one repo's platform. Web is the one platform that means
+ * something different on each instance, so it carries the instance — except on
+ * production, which keeps the bare key every sample ever written already uses.
+ */
+function status_sample_key(string $repo, string $plat, string $inst = 'prod'): string
+{
+    return $repo . '.' . $plat . ($plat === 'web' && $inst !== 'prod' ? '@' . $inst : '');
+}
+
+/**
+ * @param array $webProbeAt [instance][repo] => URLs. All three instances, not
+ *   just production: the History tab has the same prod/test/dev picker as the
+ *   rest of the page, and a `web` line recorded only from production answered
+ *   about production whichever button was lit.
+ */
+function status_sample_row(array $repos, array $webProbeAt, array $endpoints, array $results, array $running = []): array
 {
     // Every probed URL's result, flattened, so a repo can ask about its own.
     // $results also carries scalars now (checked_at) and the scopes map, and
@@ -330,25 +381,35 @@ function status_sample_row(array $repos, array $webProbe, array $endpoints, arra
         foreach ($rows as $url => $r) { if (is_array($r)) { $byUrl[$url] = $r; } }
     }
     $row = ['ts' => time(), 's' => []];
+    /** What one cell's severity resolves to, once running and n/a are applied. */
+    $put = function (string $key, ?int $sev, string $repoName) use (&$row, $running) {
+        // n/a stays n/a through a release: a repo shipping right now does
+        // not acquire a watchOS app for the duration of its own dtp.
+        if ($sev === null) { $row['s'][$key] = SEV_NA; return; }
+        // A release in flight overrides whatever the cell would otherwise
+        // say: for that stretch the honest answer is "this is being
+        // replaced right now", and the old value is not yet false.
+        $row['s'][$key] = isset($running[$repoName]) ? SEV_RUNNING : $sev;
+    };
     foreach ($repos as $repo) {
         foreach ($repo['plat'] as $plat => $cell) {
-            $sev = $cell[0] ?? null;
-            if ($plat === 'web' && isset($webProbe[$repo['name']])) {
-                // MEASURED, not recorded: the worst of this repo's own probes.
-                // A gated 401 counts as up — the server answered.
-                $sev = 0;
-                foreach ($webProbe[$repo['name']] as $u) {
-                    if (empty($byUrl[$u]['ok'])) { $sev = 3; break; }
+            if ($plat === 'web') {
+                // MEASURED, not recorded, and measured ONCE PER INSTANCE: the
+                // worst of this repo's own probes there. A gated 401 counts as
+                // up — the server answered. An instance the repo does not ship
+                // to records n/a, which is an absence and not a failure.
+                foreach ($webProbeAt as $inst => $byRepo) {
+                    $urls = $byRepo[$repo['name']] ?? null;
+                    $sev  = null;
+                    if ($urls) {
+                        $sev = 0;
+                        foreach ($urls as $u) { if (empty($byUrl[$u]['ok'])) { $sev = 3; break; } }
+                    }
+                    $put(status_sample_key($repo['name'], 'web', (string) $inst), $sev, $repo['name']);
                 }
+                continue;
             }
-            // n/a stays n/a through a release: a repo shipping right now does
-            // not acquire a watchOS app for the duration of its own dtp.
-            if ($sev === null) { $row['s'][$repo['name'] . '.' . $plat] = SEV_NA; continue; }
-            // A release in flight overrides whatever the cell would otherwise
-            // say: for that stretch the honest answer is "this is being
-            // replaced right now", and the old value is not yet false.
-            if (isset($running[$repo['name']])) { $sev = SEV_RUNNING; }
-            $row['s'][$repo['name'] . '.' . $plat] = (int) $sev;
+            $put(status_sample_key($repo['name'], $plat), $cell[0] ?? null, $repo['name']);
         }
     }
     return $row;
@@ -748,6 +809,6 @@ if (!is_array($results) || !$results) {
     // what the History graph draws a line per app from. Recorded only on a
     // real sweep, never on a cache hit, so the samples are spaced by the cache
     // TTL rather than by how often somebody opened the page.
-    status_sample_record(status_sample_row($repos, $WEB_PROBE, $endpoints, $results,
+    status_sample_record(status_sample_row($repos, $WEB_PROBE_AT, $endpoints, $results,
                                            status_running_repos(status_latest_run())));
 }

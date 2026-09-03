@@ -110,8 +110,23 @@ visitor**, which is the case that catches the session never being read on a page
 login of its own. An agent files itself as `claudio` by header or by a command-line user
 agent, and the half worth testing is the other one: a browser-shaped UA never lands in
 that lane. `hit_counts()` counts only inside its window and counts signed-in visitors
-apart.
-*(By eye: the KPI row on the status page's Live tab, and the whole Usage tab.)*
+apart, **and splits by instance** — the status page's one prod/test/dev picker claims to
+scope the whole page, and that strip used to answer "the whole host" whichever button was
+lit. `hit_app()` strips **both** sandbox prefixes; `/test` was stripped and `/dev` was
+not, which filed a whole sandbox under an app called "dev".
+
+The Usage tab's aggregation is asserted here rather than by eye, because every number on
+that tab is derived from it. **Anonymous visitors are ONE row per lane and instance**
+(Sean, 2026-09-03: "group together anonymous requests, don't list hundreds of anon-xxxx")
+carrying the address count and the busiest `HIT_ADDR_TOP` of them for the fold-out — the
+old per-address `anon-N` rows were over a thousand table rows, a thousand chart lines and
+a thousand entries in the JSON the page ships. **The person key carries the instance**, so
+Claude's lane — the one lane that spans all three — narrows with the picker instead of
+pooling. And the invariant the tab actually broke: **`hit_usage_total()` for a lane equals
+the sum of the rows shown under it**, per window and per app. The page's JavaScript
+mirrors that one function; nothing else on the tab adds a number up.
+*(By eye: the KPI row on the status page's Live tab, and the whole Usage tab — the
+pickers, the fold-out, the column sort and the chart are all JS the harness never runs.)*
 
 ### `lib`
 Output is escaped: a palette named `<script>alert(1)</script>` comes back as

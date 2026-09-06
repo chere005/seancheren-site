@@ -353,21 +353,23 @@ function hit_lane(array $row, array $dc = []): string
     // Claude's traffic first, whichever instance it hit: "separate ALL your
     // traffic" means the sandbox runs count as its own too.
     if (($row['agent'] ?? '-') === 'claudio') { return 'claudio'; }
+    // BOTS ARE NOT PEOPLE, AND NOT SANDBOX TESTING EITHER — Sean, 2026-09-06:
+    // first "i don't buy that last 3 days has been consistently over 600
+    // requests from random different addresses" (it was scanners from
+    // datacenters, poking at /.env and /wp-config.php), then "move datacenter
+    // scanners to their own category as well similar to how claudio's traffic
+    // is separated out". So this sits with claudio, ABOVE the instance
+    // routing: a scanner hitting the test or dev sandbox is a scanner, not
+    // someone rehearsing a release there. Only the anonymous ones — a
+    // datacenter address that actually signed in is a real session and stays
+    // in its user's lane, which is all a bot never is.
+    if (($row['user'] ?? '-') === '-' && !empty($dc[$row['ip'] ?? ''])) { return 'bots'; }
     $inst = $row['instance'] ?? 'prod';
     // dev is its own lane since it became a real instance (2026-08-23) — its
     // traffic filed under "test" would say the wrong sandbox was busy.
     if ($inst === 'dev') { return 'dev'; }
     if ($inst !== 'prod') { return 'test'; }
-    if (($row['user'] ?? '-') === 'sean') { return 'sean'; }
-    // BOTS ARE NOT PEOPLE — Sean, 2026-09-06: "i don't buy that last 3 days has
-    // been consistently over 600 requests from random different addresses". It
-    // was scanners from datacenters, poking at /.env and /wp-config.php. An
-    // anonymous request from an address ip-api has RESOLVED as hosting is filed
-    // here, so "Other people" means people. A datacenter address that signed in
-    // is a real session and stays in its user's lane — this only catches the
-    // anonymous ones, which is all the bots ever are.
-    if (($row['user'] ?? '-') === '-' && !empty($dc[$row['ip'] ?? ''])) { return 'bots'; }
-    return 'other';
+    return ($row['user'] ?? '-') === 'sean' ? 'sean' : 'other';
 }
 
 /**

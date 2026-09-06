@@ -1600,6 +1600,12 @@ t('datacenter traffic is a bot, not another person', function () {
     eq('bots', hit_lane(['instance' => 'prod', 'user' => '-', 'ip' => '9.9.9.9'], ['9.9.9.9' => true]));
     eq('other', hit_lane(['instance' => 'prod', 'user' => '-', 'ip' => '9.9.9.9'], []));
     eq('sean', hit_lane(['instance' => 'prod', 'user' => 'sean', 'ip' => '9.9.9.9'], ['9.9.9.9' => true]));
+    // A scanner on the SANDBOX is a scanner, not sandbox testing — bots sit
+    // above the instance routing, the same top-level split claudio gets
+    // (Sean, 2026-09-06: "similar to how claudio's traffic is separated out").
+    eq('bots', hit_lane(['instance' => 'test', 'user' => '-', 'ip' => '9.9.9.9'], ['9.9.9.9' => true]), 'a datacenter hit on test is a bot');
+    eq('bots', hit_lane(['instance' => 'dev', 'user' => '-', 'ip' => '9.9.9.9'], ['9.9.9.9' => true]), 'and on dev');
+    eq('test', hit_lane(['instance' => 'test', 'user' => '-', 'ip' => '5.6.7.8'], ['9.9.9.9' => true]), 'a real visitor on test is still sandbox testing');
     @unlink(datadir() . '/dc.json');
 });
 

@@ -1838,10 +1838,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
   // read, so its users appear here only once they have actually visited.
   $usage = $USAGE_DATA;
   $uw = $usage['windows'];
-  $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'claudio' => 'Claudio', 'test' => 'Tests', 'dev' => 'Dev'];
+  $laneName = ['sean' => 'Sean', 'other' => 'Other people', 'bots' => 'Bots', 'claudio' => 'Claudio', 'test' => 'Tests', 'dev' => 'Dev'];
   $laneDek  = [
       'sean'    => 'production, signed in as sean',
       'other'   => 'production, anybody else — signed in or not',
+      'bots'    => 'datacenter & scanner traffic — no browser behind it',
       'claudio' => "Claude's own requests, on the selected instance",
       'test'    => 'the test.seancheren.com sandbox',
       'dev'     => 'the dev.seancheren.com sandbox',
@@ -1849,7 +1850,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   // Which instance's traffic a lane is. Every lane but Claude's IS an
   // instance, so the picker hides the card outright; Claude hits all three, so
   // that card stays and its ROWS narrow instead ('all' survives every choice).
-  $laneInst = ['sean' => 'prod', 'other' => 'prod', 'claudio' => 'all', 'test' => 'test', 'dev' => 'dev'];
+  $laneInst = ['sean' => 'prod', 'other' => 'prod', 'bots' => 'prod', 'claudio' => 'all', 'test' => 'test', 'dev' => 'dev'];
   // Every number below is production's, because $inst0 is the picker's
   // default; JS rewrites all of them the moment it is moved, through the one
   // rule in usageTotal() / hit_usage_total().

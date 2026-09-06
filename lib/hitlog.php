@@ -348,7 +348,7 @@ function hit_row_instance(array $row): string
  *          them under "unknown" would have made the one lane that answers
  *          "is anyone out there" the emptiest of the three.
  */
-function hit_lane(array $row): string
+function hit_lane(array $row, array $dc = []): string
 {
     // Claude's traffic first, whichever instance it hit: "separate ALL your
     // traffic" means the sandbox runs count as its own too.
@@ -358,7 +358,16 @@ function hit_lane(array $row): string
     // traffic filed under "test" would say the wrong sandbox was busy.
     if ($inst === 'dev') { return 'dev'; }
     if ($inst !== 'prod') { return 'test'; }
-    return ($row['user'] ?? '-') === 'sean' ? 'sean' : 'other';
+    if (($row['user'] ?? '-') === 'sean') { return 'sean'; }
+    // BOTS ARE NOT PEOPLE — Sean, 2026-09-06: "i don't buy that last 3 days has
+    // been consistently over 600 requests from random different addresses". It
+    // was scanners from datacenters, poking at /.env and /wp-config.php. An
+    // anonymous request from an address ip-api has RESOLVED as hosting is filed
+    // here, so "Other people" means people. A datacenter address that signed in
+    // is a real session and stays in its user's lane — this only catches the
+    // anonymous ones, which is all the bots ever are.
+    if (($row['user'] ?? '-') === '-' && !empty($dc[$row['ip'] ?? ''])) { return 'bots'; }
+    return 'other';
 }
 
 /**
@@ -411,6 +420,11 @@ function hit_usage(array $roster = []): array
     $now   = time();
     $rows  = hit_tail_since($now - max(array_column($wins, 'secs')), HIT_TAIL_BYTES);
 
+    // The datacenter map, loaded once — a read of geoip.php's cache, never a
+    // lookup. An address it has not resolved yet is simply not a bot yet, the
+    // same eventual-consistency the location column already has.
+    $dc = function_exists('dc_all') ? dc_all() : [];
+
     $people = [];
     $series = [];
     $apps   = [];   // [instance][app][window] — the picker follows the instance
@@ -418,7 +432,7 @@ function hit_usage(array $roster = []): array
     $appIps = [];   // [person][app][address] => true, for "how many addresses"
 
     foreach ($rows as $r) {
-        $lane = hit_lane($r);
+        $lane = hit_lane($r, $dc);
         $inst = hit_row_instance($r);
         /**
          * ANONYMOUS IS ONE ROW, NOT HUNDREDS — Sean, 2026-09-03: "group

@@ -38,6 +38,46 @@ function geo_cache_path(): string
     return rtrim($dir, '/') . '/geo.json';
 }
 
+/**
+ * WHETHER AN ADDRESS IS A DATACENTER — Sean, 2026-09-06: "i don't buy that
+ * last 3 days has been consistently over 600 requests from random different
+ * addresses". It was not people. It was scanners and crawlers from hosting
+ * providers — DigitalOcean, Hetzner, OVH, Scaleway, Alibaba, AWS — poking at
+ * /.env and /wp-config.php.bak and never carrying a browser. ip-api already
+ * tells us: its `hosting` flag is true for a datacenter address and false for
+ * a residential one, and this batch already asks for it.
+ *
+ * Kept in a FILE BESIDE geo.json rather than folded into it, so geo_for() and
+ * every reader of the location cache stay untouched and typed the way they
+ * were. Same resolve clock, same batch call, same self-healing write.
+ */
+function dc_cache_path(): string
+{
+    $shared = '/home/protected/logs';
+    if (is_dir($shared)) { return $shared . '/dc.json'; }
+    $dir = function_exists('app_config') ? (string) (app_config()['data_dir'] ?? '') : '';
+    if ($dir === '') { $dir = dirname(__DIR__) . '/data'; }
+    return rtrim($dir, '/') . '/dc.json';
+}
+
+/** The whole datacenter map, address => bool. */
+function dc_all(): array
+{
+    $p = dc_cache_path();
+    if (!is_file($p)) { return []; }
+    $d = json_decode((string) @file_get_contents($p), true);
+    return is_array($d) ? $d : [];
+}
+
+/** True only for an address ip-api has RESOLVED and called hosting. A miss is
+ *  false — an unresolved address is not assumed to be anything. */
+function geo_is_dc(string $ip): bool
+{
+    if ($ip === '' || $ip === '-') { return false; }
+    $all = dc_all();
+    return !empty($all[$ip]);
+}
+
 /** The whole cache, address => label. Plain JSON: it holds no secret. */
 function geo_all(): array
 {
@@ -86,7 +126,7 @@ function geo_resolve_new(int $sinceSecs = 7 * 86400, int $max = 100): int
     }
     if (!$want) { return 0; }
 
-    $body = json_encode(array_map(fn($ip) => ['query' => $ip, 'fields' => 'status,country,regionName,city,query'],
+    $body = json_encode(array_map(fn($ip) => ['query' => $ip, 'fields' => 'status,country,regionName,city,hosting,proxy,query'],
                                   array_keys($want)));
     $ctx = stream_context_create(['http' => [
         'method' => 'POST', 'timeout' => 8, 'ignore_errors' => true,
@@ -96,6 +136,7 @@ function geo_resolve_new(int $sinceSecs = 7 * 86400, int $max = 100): int
     $out = json_decode((string) $raw, true);
     if (!is_array($out)) { return 0; }
 
+    $dc = dc_all();
     $n = 0;
     foreach ($out as $row) {
         if (!is_array($row) || empty($row['query'])) { continue; }
@@ -106,6 +147,9 @@ function geo_resolve_new(int $sinceSecs = 7 * 86400, int $max = 100): int
             $cache[$ip] = '-';
             continue;
         }
+        // hosting OR proxy — a datacenter address, whichever way ip-api names
+        // it — is not a person browsing the site.
+        $dc[$ip] = !empty($row['hosting']) || !empty($row['proxy']);
         $bits = array_values(array_filter([
             (string) ($row['city'] ?? ''), (string) ($row['regionName'] ?? ''), (string) ($row['country'] ?? ''),
         ], fn($x) => $x !== ''));
@@ -129,5 +173,12 @@ function geo_resolve_new(int $sinceSecs = 7 * 86400, int $max = 100): int
     }
     @chmod($path, 0664);
     @chgrp($path, 'web');
+    // The datacenter map, same self-healing write — a failure here only means
+    // the bot lane under-counts, never that a page breaks, so it is not fatal.
+    $dcPath = dc_cache_path();
+    if (@file_put_contents($dcPath, json_encode($dc), LOCK_EX) !== false) {
+        @chmod($dcPath, 0664);
+        @chgrp($dcPath, 'web');
+    }
     return $n;
 }

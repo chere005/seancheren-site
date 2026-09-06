@@ -41,6 +41,10 @@ putenv('SUITE_THEMES_USERS=*');   // any signed-in account, in scratch only
 require_once $root . '/lib/auth.php';
 require_once $root . '/lib/richtext.php';
 require_once $root . '/lib/site.php';
+// geoip.php gives hit_usage() its datacenter map (the bots lane). The status
+// page always loads it before using the hit log; the unit checks must too, or
+// dc_all() is absent and every request looks like a person.
+require_once $root . '/lib/geoip.php';
 
 // ---------------------------------------------------------------- tiny test framework
 
@@ -1567,6 +1571,34 @@ t("Claude's traffic is split by instance, not pooled across them", function () {
     eq(1, hit_usage_total($u['people'], 'claudio', 'test', 'hour'), 'the test sandbox');
     eq(1, hit_usage_total($u['people'], 'claudio', 'dev', 'hour'), 'the dev sandbox');
     eq(3, count(array_filter($u['people'], fn($p) => $p['lane'] === 'claudio')), 'one row per instance');
+});
+
+t('datacenter traffic is a bot, not another person', function () {
+    // Sean, 2026-09-06: "i don't buy that last 3 days has been consistently
+    // over 600 requests from random different addresses". It was scanners from
+    // hosting providers, not people. An anonymous prod request from an address
+    // geoip has resolved as hosting is filed in its own lane, so "Other people"
+    // means people.
+    $log = datadir() . '/hits.log';
+    $t = time() - 30;
+    file_put_contents($log, implode("\n", [
+        "$t\tprod\thome\tGET\t-\t-\t9.9.9.9",     // a datacenter address (fixture below)
+        "$t\tprod\thome\tGET\t-\t-\t5.6.7.8",     // a residential visitor
+        "$t\tprod\thome\tGET\tsean\t-\t9.9.9.9",  // even from a bot address, a session is a person
+    ]) . "\n");
+    // The dc map geoip.php would have built from the sweep.
+    file_put_contents(datadir() . '/dc.json', json_encode(['9.9.9.9' => true]));
+
+    $u = hit_usage();
+    eq(1, hit_usage_total($u['people'], 'bots', 'prod', 'hour'), 'the datacenter GET is a bot');
+    eq(1, hit_usage_total($u['people'], 'other', 'prod', 'hour'), 'the residential GET is a person');
+    eq(1, hit_usage_total($u['people'], 'sean', 'prod', 'hour'), 'a signed-in session stays a person, bot address or not');
+
+    // hit_lane is the rule, and it holds without the map too: no map, no bots.
+    eq('bots', hit_lane(['instance' => 'prod', 'user' => '-', 'ip' => '9.9.9.9'], ['9.9.9.9' => true]));
+    eq('other', hit_lane(['instance' => 'prod', 'user' => '-', 'ip' => '9.9.9.9'], []));
+    eq('sean', hit_lane(['instance' => 'prod', 'user' => 'sean', 'ip' => '9.9.9.9'], ['9.9.9.9' => true]));
+    @unlink(datadir() . '/dc.json');
 });
 
 t('a known account with no traffic is still listed, at zero', function () {

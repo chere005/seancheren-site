@@ -34,7 +34,7 @@ ob_start();
 <h1>Hello!</h1>
 <p>Thanks to my good friend claudio (I really just like the nickname, I'm still rather agnostic to models and more concerned with agent harnesses, but I digress), apparently spinning up web applications and apps is incredibly trivial to vibe code slop that somehow seems to work in testing!</p>
 <p>Check out the <a href="/projects/">projects page</a> to see what I felt like posting that I'm clawing at time to work on..</p>
-<p>And.. if you poke around, you might find some demo projects sitting at places like my url/chat or url/reminders.</p>
+<p>And.. if you poke around, you might find some demo projects sitting at places like my url/chat.</p>
 <p>Try not to blast through my (extremely low) server budget :)</p>
 <div class="sig">
   <div>&mdash;S</div>

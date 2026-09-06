@@ -1239,7 +1239,9 @@ t('projects lists the theme picker and CalMind with their links', function () {
     has('>Vibe Coding Apps</h3>', $b, 'the parent section');
     has('>Theme Picker</h4>', $b, 'the theme picker entry, a subsection of it');
     has('href="/themepicker/"', $b, 'its T-icon link to the page');
-    has('https://github.com/chere005/CalMind/tree/main/public/themepicker', $b, 'and to its folder in the repo');
+    // The picker's source is in THIS repo, not CalMind — the old link 404'd (fixed 2026-09-06).
+    has('https://github.com/chere005/seancheren-site/tree/main/public/themepicker', $b, 'and to its folder in the repo');
+    hasnt('CalMind/tree/main/public/themepicker', $b, 'and not the dead CalMind path it used to point at');
     has('>CalMind</h4>', $b, 'the CalMind entry, a subsection of it');
     has('href="https://github.com/chere005/CalMind"', $b, 'its repo link');
     has('seancheren.com/calmind', $b, 'and the link to the app');

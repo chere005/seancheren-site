@@ -48,7 +48,7 @@ $tIcon = '<svg class="giticon" viewBox="0 0 16 16" width="20" height="20" aria-h
 <p>Apparently getting a functioning user experience often means choosing the right colors (for text readability, disambiguation, etc).. I was trying to visualize palettes, and my good friend claudio went ahead and made this interactive page, which I thought was useful.. Now it's used in a few of my projects, so I thought I'd list it here.</p>
 <p class="plinks">
   <a class="gitlink" href="/themepicker/" title="Open the theme picker" aria-label="Open the theme picker"><?= $tIcon ?></a>
-  <a class="gitlink" href="https://github.com/chere005/CalMind/tree/main/public/themepicker" title="Theme picker source on GitHub" aria-label="Theme picker source on GitHub"><?= $gitIcon ?></a>
+  <a class="gitlink" href="https://github.com/chere005/seancheren-site/tree/main/public/themepicker" title="Theme picker source on GitHub" aria-label="Theme picker source on GitHub"><?= $gitIcon ?></a>
 </p>
 
 <h4>CalMind</h4>

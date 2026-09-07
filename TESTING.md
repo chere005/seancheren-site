@@ -126,7 +126,9 @@ pooling. And the invariant the tab actually broke: **`hit_usage_total()` for a l
 the sum of the rows shown under it**, per window and per app. The page's JavaScript
 mirrors that one function; nothing else on the tab adds a number up. **Datacenter traffic is a bot, not a person** (Sean, 2026-09-06: the last-3-days count was not 600 people, it was scanners): an anonymous prod request whose address geoip has resolved as `hosting`/`proxy` is filed in a `bots` lane, so "Other people" means people — a signed-in session from a datacenter address is still that person. `hit_lane()` is the rule and takes the datacenter map as an argument, proven both with the map (bots) and without it (other).
 *(By eye: the KPI row on the status page's Live tab, and the whole Usage tab — the
-pickers, the fold-out, the column sort and the chart are all JS the harness never runs.)*
+instance/app pickers, the **Show / filter-out toggles** (Me · Anonymous · Bots · Claudio,
+which drop a category from the headlines, the tables and the chart together), the
+fold-out, the column sort and the chart are all JS the harness never runs.)*
 
 ### `lib`
 Output is escaped: a palette named `<script>alert(1)</script>` comes back as

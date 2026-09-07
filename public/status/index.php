@@ -733,6 +733,26 @@ function cell_chip(?int $sev, string $repo, array $running): string
   tr.app-zero { opacity: 0.4; }
   .usage-none { padding: 20px 18px; color: var(--ink-faint); font-size: 0.85rem; }
 
+  /* Filter-out toggles — one pill per category of traffic Sean may want gone
+     (himself, anonymous visitors, Claude, the datacenter bots). Accent when
+     the traffic is SHOWN; struck through and faint when filtered out, so the
+     pill reads as "this is currently excluded" at a glance. */
+  .usage-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 14px; }
+  .filter-label { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.08em;
+                  text-transform: uppercase; color: var(--ink-faint); margin-right: 2px; }
+  .filt-tab {
+    font: inherit; font-size: 0.76rem; cursor: pointer; padding: 4px 12px;
+    border-radius: 999px; border: 1px solid var(--accent);
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .filt-tab .filt-n { margin-left: 6px; font-family: var(--font-mono); font-size: 0.66rem; opacity: 0.75; }
+  .filt-tab.off {
+    border-color: var(--line); background: transparent; color: var(--ink-faint);
+    font-weight: 400; text-decoration: line-through; text-decoration-thickness: 1px;
+  }
+  .filt-tab.off .filt-n { opacity: 0.5; }
+  .filt-tab:hover { border-color: var(--accent); }
+
   .tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
   .inst-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .inst-label { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.08em;
@@ -1875,6 +1895,19 @@ function cell_chip(?int $sev, string $repo, array $running): string
         // short log. The start date is the whole of that caveat. ?>
   <p class="dek">Log starts <strong><?= $usage['oldest'] ? e(ctFull($usage['oldest'])) : '&mdash;' ?></strong></p>
 
+  <?php // FILTER OUT A WHOLE CATEGORY — Sean, 2026-09-06: "add buttons to
+        // filter out any of anonymous, claudio, bots traffic ... or me". Four
+        // toggles: his own signed-in traffic, the anonymous visitors, Claude's
+        // agent traffic and the datacenter bots. Struck-through means excluded;
+        // the tables, the lane headlines and the chart all drop it together. ?>
+  <div class="usage-filter">
+    <span class="filter-label">Show</span>
+    <button type="button" class="filt-tab" data-filter="sean">Me</button>
+    <button type="button" class="filt-tab" data-filter="anon">Anonymous</button>
+    <button type="button" class="filt-tab" data-filter="bots">Bots</button>
+    <button type="button" class="filt-tab" data-filter="claudio">Claudio</button>
+  </div>
+
   <div class="kpis" style="margin-bottom:6px">
     <?php foreach ($laneName as $lk => $ln): ?>
       <div class="kpi" data-inst-only="<?= e($laneInst[$lk]) ?>" data-kpi-lane="<?= e($lk) ?>">
@@ -1890,7 +1923,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
     // Visible on the server's first paint — the rest of this lane's rows are
     // in the DOM too, carrying the instance they belong to.
     $shown = array_filter($rows, fn($p) => $p['inst'] === $laneAt($lk)); ?>
-    <div class="table-card" data-inst-only="<?= e($laneInst[$lk]) ?>">
+    <div class="table-card" data-inst-only="<?= e($laneInst[$lk]) ?>" data-lane="<?= e($lk) ?>">
       <div class="group-head">
         <h2><?= e($ln) ?></h2>
         <p><?= e($laneDek[$lk]) ?></p>
@@ -2074,6 +2107,26 @@ function cell_chip(?int $sev, string $repo, array $running): string
     /** One person's count for a window, under the chosen app. */
     const personN = (p, wk, app) => (app === '*' ? (p.counts[wk] || 0) : (((p.apps || {})[app] || {})[wk] || 0));
     /**
+     * FILTER OUT A CATEGORY — Sean, 2026-09-06. Each toggle is true when its
+     * traffic is SHOWN. Three of them are whole lanes (his own, Claude's, the
+     * bots); "anon" is the anonymous rows that are left once those three are
+     * their own lanes — the Other-people crowd and the sandbox visitors.
+     */
+    const FILTER = { sean: true, anon: true, claudio: true, bots: true };
+    /** A whole lane switched off — its headline and card vanish, not just rows. */
+    function laneOff(lane) {
+      return (!FILTER.sean && lane === 'sean') || (!FILTER.claudio && lane === 'claudio')
+          || (!FILTER.bots && lane === 'bots');
+    }
+    /** This one person is filtered out of every count and row and line. */
+    function personOff(p) {
+      if (laneOff(p.lane)) { return true; }
+      // The leftover anonymous — not the bots or Claude, which have their own
+      // switch and are anonymous by nature.
+      return !FILTER.anon && p.anon && p.lane !== 'bots' && p.lane !== 'claudio';
+    }
+
+    /**
      * The same rule hit_usage_total() applies in PHP, and the only place a
      * total is worked out here. Two of these drifting apart is how the lane
      * headline came to disagree with the rows underneath it.
@@ -2082,7 +2135,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
       let n = 0;
       Object.keys(USAGE.people).forEach((k) => {
         const p = USAGE.people[k];
-        if (p.lane === lane && p.inst === inst) { n += personN(p, wk, app); }
+        if (p.lane === lane && p.inst === inst && !personOff(p)) { n += personN(p, wk, app); }
       });
       return n;
     }
@@ -2106,7 +2159,8 @@ function cell_chip(?int $sev, string $repo, array $running): string
       Object.keys(byApp).forEach((a) => {
         if (app !== '*' && a !== app) { return; }
         Object.keys(byApp[a]).forEach((k) => {
-          if (!USAGE.people[k] || USAGE.people[k].inst !== inst) { return; }
+          const p = USAGE.people[k];
+          if (!p || p.inst !== inst || personOff(p)) { return; }
           if (!rows[k]) { rows[k] = new Array(n0).fill(0); }
           Object.keys(byApp[a][k]).forEach((b) => { rows[k][+b] += byApp[a][k][b]; });
         });
@@ -2227,11 +2281,12 @@ function cell_chip(?int $sev, string $repo, array $running): string
         }
       });
 
-      // The rows: this instance's, with this app's numbers.
+      // The rows: this instance's, with this app's numbers, minus anything
+      // filtered out.
       document.querySelectorAll('#tab-usage .usage-table tbody tr[data-key]').forEach((tr) => {
         const p = USAGE.people[tr.dataset.key];
         if (!p) { return; }
-        tr.hidden = p.inst !== inst;
+        tr.hidden = p.inst !== inst || personOff(p);
         let total = 0;
         tr.querySelectorAll('td.num[data-win]').forEach((td) => {
           const v = personN(p, td.dataset.win, app);
@@ -2263,15 +2318,21 @@ function cell_chip(?int $sev, string $repo, array $running): string
         });
       });
 
-      // The lane headlines, and the empty state under each of them.
+      // The lane headlines: hidden when the lane is off this instance OR
+      // filtered out wholesale; otherwise recomputed minus what's filtered.
+      const instOK = (el) => { const w = el.dataset.instOnly; return w === 'all' || w === inst; };
       document.querySelectorAll('#tab-usage .kpi[data-kpi-lane]').forEach((kpi) => {
         const lane = kpi.dataset.kpiLane;
+        kpi.hidden = !instOK(kpi) || laneOff(lane);
+        if (kpi.hidden) { return; }
         kpi.querySelector('.n').textContent = usageTotal(lane, inst, '3d', app).toLocaleString();
         const tag = kpi.querySelector('.kpi-app');
         if (tag) { tag.textContent = app === '*' ? '' : app + ' · '; }
       });
       document.querySelectorAll('#tab-usage .table-card').forEach((card) => {
-        const any = [...card.querySelectorAll('tbody tr[data-key]')].some(tr => !tr.hidden);
+        const wholly = laneOff(card.dataset.lane);
+        card.hidden = !instOK(card) || wholly;
+        const any = !wholly && [...card.querySelectorAll('tbody tr[data-key]')].some(tr => !tr.hidden);
         const none = card.querySelector('.usage-none'), scroll = card.querySelector('.table-scroll');
         if (none) { none.hidden = any; }
         if (scroll) { scroll.hidden = !any; }
@@ -2279,6 +2340,17 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
       drawUsage();
     }
+
+    // The filter pills toggle a category in or out, and repaint everything from
+    // the one predicate above. Struck-through == excluded.
+    document.querySelectorAll('.usage-filter .filt-tab').forEach((b) => {
+      b.addEventListener('click', () => {
+        const key = b.dataset.filter;
+        FILTER[key] = !FILTER[key];
+        b.classList.toggle('off', !FILTER[key]);
+        applyUsage();
+      });
+    });
 
     document.querySelectorAll('#app-pick .app-tab').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('#app-pick .app-tab').forEach(o => o.classList.remove('on'));

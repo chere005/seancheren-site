@@ -765,16 +765,29 @@ function cell_chip(?int $sev, string $repo, array $running): string
   .inst-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .inst-label { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.08em;
                 text-transform: uppercase; color: var(--ink-faint); margin-right: 2px; }
-  /* The app picker wears the same pill, and used to wear the same CLASS —
-     which is how one `querySelectorAll('.inst-tab')` handler ended up wired to
-     both pickers. Same look, different name, so a selector can only ever mean
-     one of them. */
-  .inst-tab, .app-tab {
+  /* The instance picker is single-select (one of prod/test/dev). It used to
+     share a CLASS with the app picker, which is how one
+     `querySelectorAll('.inst-tab')` handler ended up wired to both — they are
+     fully separate now. */
+  .inst-tab {
     font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--ink-faint);
     background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
   }
-  .inst-tab:hover, .app-tab:hover { color: var(--ink-soft); border-color: var(--ink-soft); }
-  .inst-tab.on, .app-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .inst-tab:hover { color: var(--ink-soft); border-color: var(--ink-soft); }
+  .inst-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+  /* The page picker is multi-select and wears the same toggle as the Show
+     row — accent when the page is included, struck through when excluded. */
+  .app-tab {
+    font: inherit; font-size: 0.76rem; cursor: pointer; padding: 4px 12px;
+    border-radius: 999px; border: 1px solid var(--accent);
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .app-tab.off {
+    border-color: var(--line); background: transparent; color: var(--ink-faint);
+    font-weight: 400; text-decoration: line-through; text-decoration-thickness: 1px;
+  }
+  .app-tab:hover { border-color: var(--accent); }
   .web-cell { display: none; }
   .web-cell.on { display: inline; }
 
@@ -907,13 +920,19 @@ function cell_chip(?int $sev, string $repo, array $running): string
         // instance changes. It used to be the host-wide number, so picking the
         // dev sandbox left a row of pills reporting production's traffic
         // directly above tables that had correctly narrowed to dev. ?>
+  <?php // Multi-select, like the Show row below — Sean, 2026-09-06:
+        // "selections should work the same for selecting pages as selecting
+        // user buckets". Each page is an independent toggle (struck through
+        // when excluded); the All/None button flips them together. The single
+        // "All apps" radio is gone — its job is the All/None button's now. ?>
   <div class="app-pick" id="app-pick" hidden>
-    <button class="app-tab on" data-app="*" title="Every app on this instance">All apps<span class="app-n"></span></button>
+    <span class="filter-label">Pages</span>
     <?php // $USAGE_DATA, not $usage — the Usage tab assigns $usage further down
           // the page, so up here it was undefined and this list came out empty. ?>
     <?php foreach (($USAGE_DATA['app_order'] ?? []) as $appName): ?>
       <button class="app-tab" data-app="<?= e($appName) ?>" title="Requests in the last 3 days, on the selected instance"><?= e($appName) ?><span class="app-n"><?= (int) ($USAGE_DATA['apps']['prod'][$appName]['3d'] ?? 0) ?></span></button>
     <?php endforeach; ?>
+    <button type="button" class="filt-all" data-app-all>None</button>
   </div>
 
   <!-- ============================================================ CURRENT -->
@@ -2112,9 +2131,26 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
     /** Which instance and which app every number below is about. */
     const usageInst = () => (document.querySelector('.inst-pick .inst-tab.on') || { dataset: {} }).dataset.inst || 'prod';
-    const usageApp  = () => (document.querySelector('#app-pick .app-tab.on') || { dataset: {} }).dataset.app || '*';
-    /** One person's count for a window, under the chosen app. */
-    const personN = (p, wk, app) => (app === '*' ? (p.counts[wk] || 0) : (((p.apps || {})[app] || {})[wk] || 0));
+
+    // WHICH PAGES ARE EXCLUDED — Sean, 2026-09-06: the page picker is
+    // multi-select now, the same as the Show toggles. An empty set is "all
+    // pages", which is the common case and the fast path.
+    const APP_OFF = new Set();
+    const anyAppOff = () => APP_OFF.size > 0;
+    /** Sum a per-app map ({app: {win: n}}) over the included pages, at one window. */
+    const sumApps = (byApp, wk) => {
+      let n = 0;
+      for (const a in byApp) { if (!APP_OFF.has(a)) { n += (byApp[a][wk] || 0); } }
+      return n;
+    };
+    /** Sum a flat per-app map ({app: n}) over the included pages. */
+    const sumAppScalars = (byApp) => {
+      let n = 0;
+      for (const a in byApp) { if (!APP_OFF.has(a)) { n += (byApp[a] || 0); } }
+      return n;
+    };
+    /** One person's count for a window, over the included pages. */
+    const personN = (p, wk) => (anyAppOff() ? sumApps(p.apps || {}, wk) : (p.counts[wk] || 0));
     /**
      * FILTER OUT A CATEGORY — Sean, 2026-09-06. Each toggle is true when its
      * traffic is SHOWN. Three of them are whole lanes (his own, Claude's, the
@@ -2143,11 +2179,11 @@ function cell_chip(?int $sev, string $repo, array $running): string
      * total is worked out here. Two of these drifting apart is how the lane
      * headline came to disagree with the rows underneath it.
      */
-    function usageTotal(lane, inst, wk, app) {
+    function usageTotal(lane, inst, wk) {
       let n = 0;
       Object.keys(USAGE.people).forEach((k) => {
         const p = USAGE.people[k];
-        if (p.lane === lane && p.inst === inst && !personOff(p)) { n += personN(p, wk, app); }
+        if (p.lane === lane && p.inst === inst && !personOff(p)) { n += personN(p, wk); }
       });
       return n;
     }
@@ -2162,14 +2198,13 @@ function cell_chip(?int $sev, string $repo, array $running): string
       // in here, for the one app being drawn. "*" sums every app.
       const n0 = USAGE.buckets[wk];
       const byApp = USAGE.series[wk] || {};
-      const app = usageApp();
       // …and only the instance that is selected. The chart drew every lane on
       // every instance, so picking a sandbox left production's traffic on the
       // plot under tables that had correctly narrowed to the sandbox.
       const inst = usageInst();
       const rows = {};
       Object.keys(byApp).forEach((a) => {
-        if (app !== '*' && a !== app) { return; }
+        if (APP_OFF.has(a)) { return; }
         Object.keys(byApp[a]).forEach((k) => {
           const p = USAGE.people[k];
           if (!p || p.inst !== inst || personOff(p)) { return; }
@@ -2276,21 +2311,14 @@ function cell_chip(?int $sev, string $repo, array $running): string
      * the pills claim, and what the chart draws.
      */
     function applyUsage() {
-      const inst = usageInst(), app = usageApp();
+      const inst = usageInst();
 
-      // The pills: this instance's counts, over three days.
+      // The page pills: this instance's own 3-day count on each, whether or
+      // not it is currently included.
       const appsHere = (USAGE.apps || {})[inst] || {};
       document.querySelectorAll('#app-pick .app-tab').forEach((b) => {
         const n = b.querySelector('.app-n');
-        if (!n) { return; }
-        const a = b.dataset.app;
-        if (a === '*') {
-          let t = 0;
-          Object.keys(appsHere).forEach(k => { t += appsHere[k]['3d'] || 0; });
-          n.textContent = t.toLocaleString();
-        } else {
-          n.textContent = ((appsHere[a] || {})['3d'] || 0).toLocaleString();
-        }
+        if (n) { n.textContent = ((appsHere[b.dataset.app] || {})['3d'] || 0).toLocaleString(); }
       });
 
       // The rows: this instance's, with this app's numbers, minus anything
@@ -2301,27 +2329,29 @@ function cell_chip(?int $sev, string $repo, array $running): string
         tr.hidden = p.inst !== inst || personOff(p);
         let total = 0;
         tr.querySelectorAll('td.num[data-win]').forEach((td) => {
-          const v = personN(p, td.dataset.win, app);
+          const v = personN(p, td.dataset.win);
           total += v;
           setNum(td, v);
         });
         tr.classList.toggle('app-zero', total === 0);
-        // How many addresses, under this app — the aggregate's one non-count
-        // column, and it has to move with the rest or it reads as the total.
+        // How many addresses, across the included pages — the aggregate's one
+        // non-count column, and it has to move with the rest or it reads as
+        // the total. (A subset sums per-page address counts, so an address on
+        // two pages counts twice — a soft stat, honestly approximate.)
         const addr = tr.querySelector('td[data-addr] .addr-n');
         if (addr && p.anon) {
-          const n = app === '*' ? p.addresses : ((p.addr_apps || {})[app] || 0);
+          const n = anyAppOff() ? sumAppScalars(p.addr_apps || {}) : p.addresses;
           addr.textContent = n.toLocaleString();
           addr.parentElement.dataset.sort = n;
         }
-        // Its folded-out addresses follow it: same instance, same app, and
+        // Its folded-out addresses follow it: same instance, same pages, and
         // never on screen while their parent row is off it.
         document.querySelectorAll('#tab-usage tr[data-of="' + CSS.escape(tr.dataset.key) + '"]').forEach((sub) => {
           const open = !tr.hidden && tr.querySelector('.agg-toggle')?.getAttribute('aria-expanded') === 'true';
           const t = (p.top || {})[sub.dataset.addrIp || ''];
           let n = 0;
           sub.querySelectorAll('td.num[data-win]').forEach((td) => {
-            const v = !t ? 0 : (app === '*' ? (t.counts[td.dataset.win] || 0) : (((t.apps || {})[app] || {})[td.dataset.win] || 0));
+            const v = !t ? 0 : (anyAppOff() ? sumApps(t.apps || {}, td.dataset.win) : (t.counts[td.dataset.win] || 0));
             n += v;
             setNum(td, v);
           });
@@ -2341,9 +2371,14 @@ function cell_chip(?int $sev, string $repo, array $running): string
         const lane = kpi.dataset.kpiLane;
         kpi.hidden = !instOK(kpi);
         if (kpi.hidden) { return; }
-        kpi.querySelector('.n').textContent = usageTotal(lane, inst, '3d', app).toLocaleString();
+        kpi.querySelector('.n').textContent = usageTotal(lane, inst, '3d').toLocaleString();
         const tag = kpi.querySelector('.kpi-app');
-        if (tag) { tag.textContent = app === '*' ? '' : app + ' · '; }
+        if (tag) {
+          // Name the page when exactly one is left; count them when it is a
+          // handful; say nothing when every page is in.
+          const inc = APP_LIST.filter(a => !APP_OFF.has(a));
+          tag.textContent = !anyAppOff() ? '' : (inc.length === 1 ? inc[0] + ' · ' : inc.length + ' pages · ');
+        }
       });
       document.querySelectorAll('#tab-usage .table-card').forEach((card) => {
         card.hidden = !instOK(card);
@@ -2387,11 +2422,30 @@ function cell_chip(?int $sev, string $repo, array $running): string
     }
     syncFilterUI();
 
+    // The page picker: multi-select toggles plus an All/None button, exactly
+    // like the Show row — Sean, 2026-09-06: "selections should work the same
+    // for selecting pages as selecting user buckets".
+    const APP_LIST = [...document.querySelectorAll('#app-pick .app-tab')].map(b => b.dataset.app);
+    const appAllBtn = document.querySelector('#app-pick [data-app-all]');
+    function syncAppUI() {
+      document.querySelectorAll('#app-pick .app-tab').forEach(b => b.classList.toggle('off', APP_OFF.has(b.dataset.app)));
+      if (appAllBtn) { appAllBtn.textContent = APP_OFF.size === 0 ? 'None' : 'All'; }
+    }
     document.querySelectorAll('#app-pick .app-tab').forEach(b => b.addEventListener('click', () => {
-      document.querySelectorAll('#app-pick .app-tab').forEach(o => o.classList.remove('on'));
-      b.classList.add('on');
+      const a = b.dataset.app;
+      if (APP_OFF.has(a)) { APP_OFF.delete(a); } else { APP_OFF.add(a); }
+      syncAppUI();
       applyUsage();
     }));
+    if (appAllBtn) {
+      appAllBtn.addEventListener('click', () => {
+        if (APP_OFF.size === 0) { APP_LIST.forEach(a => APP_OFF.add(a)); }  // all on → none
+        else { APP_OFF.clear(); }                                          // any off → all
+        syncAppUI();
+        applyUsage();
+      });
+    }
+    syncAppUI();
 
     // A row's addresses fold out in place. Delegated, because the poller
     // replaces the whole table.

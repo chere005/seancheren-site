@@ -873,6 +873,45 @@ function cell_chip(?int $sev, string $repo, array $running): string
     { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' });
   const fmtF = (ts) => new Date(ts * 1000).toLocaleString('en-US',
     { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  /**
+   * ONE INSTANT TOOLTIP FOR EVERY PLOT — Sean, 2026-08-23: "tooltip for what
+   * happened at the event should come up quicker", and 2026-09-06: "all plots
+   * on the status page should have tooltips". The SVG `<title>` is the OS
+   * tooltip and waits about a second before it appears, which on a chart you
+   * are scrubbing across is long enough to give up on; every mark still emits
+   * one as the no-JS and screen-reader fallback. This shows the same text with
+   * no delay, and it is installed HERE — page-wide and ungated — so the
+   * History statecharts and the Usage chart share it, and it exists even
+   * before any samples do. Delegated, so it covers marks drawn at any time.
+   */
+  (function () {
+    const tipBox = document.createElement('div');
+    tipBox.className = 'evt-tip';
+    tipBox.hidden = true;
+    const place = (el) => {
+      tipBox.textContent = el.dataset.tip || el.querySelector?.('title')?.textContent || '';
+      if (!tipBox.textContent) { return; }
+      tipBox.hidden = false;
+      const r = el.getBoundingClientRect();
+      const bw = tipBox.offsetWidth, bh = tipBox.offsetHeight;
+      let left = r.left + r.width / 2 - bw / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - bw - 8));
+      let top = r.top - bh - 10;
+      if (top < 8) { top = r.bottom + 10; }
+      tipBox.style.left = Math.round(left) + 'px';
+      tipBox.style.top  = Math.round(top) + 'px';
+    };
+    const arm = () => { if (!tipBox.isConnected) { document.body.appendChild(tipBox); } };
+    document.addEventListener('mouseover', (e) => {
+      const el = e.target.closest && e.target.closest('.evt');
+      if (el) { arm(); place(el); }
+    });
+    document.addEventListener('mouseout', (e) => {
+      if (e.target.closest && e.target.closest('.evt')) { tipBox.hidden = true; }
+    });
+    document.addEventListener('scroll', () => { tipBox.hidden = true; }, true);
+  })();
 </script>
 
 <div class="page">
@@ -1637,37 +1676,9 @@ function cell_chip(?int $sev, string $repo, array $running): string
         card.querySelector('.graph-key').innerHTML = keyHtml;
       }
 
-      /**
-       * AN INSTANT TOOLTIP — Sean, 2026-08-23: "tooltip for what happened at
-       * the event should come up quicker". The SVG `<title>` element is the
-       * OS's tooltip and waits about a second before appearing, which on a
-       * chart you are scrubbing across is long enough to give up on. This
-       * shows the same text on hover with no delay; the `<title>` stays as the
-       * fallback for a page reached without JS and for screen readers, which
-       * is why both are emitted rather than one replacing the other.
-       */
-      const tipBox = document.createElement('div');
-      tipBox.className = 'evt-tip';
-      tipBox.hidden = true;
-      document.body.appendChild(tipBox);
-      document.addEventListener('mouseover', (e) => {
-        const el = e.target.closest && e.target.closest('.evt');
-        if (!el) { return; }
-        tipBox.textContent = el.dataset.tip || '';
-        tipBox.hidden = false;
-        const r = el.getBoundingClientRect();
-        const bw = tipBox.offsetWidth, bh = tipBox.offsetHeight;
-        let left = r.left + r.width / 2 - bw / 2;
-        left = Math.max(8, Math.min(left, window.innerWidth - bw - 8));
-        let top = r.top - bh - 10;
-        if (top < 8) { top = r.bottom + 10; }
-        tipBox.style.left = Math.round(left) + 'px';
-        tipBox.style.top  = Math.round(top) + 'px';
-      });
-      document.addEventListener('mouseout', (e) => {
-        if (e.target.closest && e.target.closest('.evt')) { tipBox.hidden = true; }
-      });
-      document.addEventListener('scroll', () => { tipBox.hidden = true; }, true);
+      // The instant tooltip that these `.evt` dots use is installed once,
+      // page-wide, in the main script at the bottom — so the Usage chart gets
+      // it too, and it exists even on a status page that has no samples yet.
 
       function drawAll() { document.querySelectorAll('.graph-card[data-graph]').forEach(c => { if (!c.hidden) { drawChart(c); } }); }
 
@@ -2242,19 +2253,29 @@ function cell_chip(?int $sev, string $repo, array $running): string
                         : w.bucket >= 3600 ? (w.bucket / 3600) + 'h'
                         : (w.bucket / 60) + 'm';
 
+      // Text bound for a data-tip attribute or an SVG <title> — quotes and
+      // angle brackets can't be allowed to break out of either.
+      const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       keys.forEach((k) => {
         const d = rows[k].map((v, i) => (i ? 'L' : 'M') + x(i) + ' ' + y(v)).join(' ');
+        const who = esc(USAGE.people[k].name);
+        // The line keeps the OS <title> only: an instant tooltip anchored to a
+        // full-width path would pop at the line's mid-point, nowhere near the
+        // cursor. The dots below are the small marks that carry the instant
+        // tooltip, one per data point.
         out += '<path d="' + d + '" fill="none" stroke="' + UCOLOR[k] + '" stroke-width="2.2" ' +
                'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.9">' +
-               '<title>' + USAGE.people[k].name + '</title></path>';
+               '<title>' + who + '</title></path>';
         // A dot on every bucket that actually carried traffic, with its count
         // and its clock time — the line alone cannot be read back to "how many,
         // when", which is the whole question this chart answers.
         rows[k].forEach((v, i) => {
           if (!v) { return; }
-          out += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="3" fill="' + UCOLOR[k] +
-                 '"><title>' + USAGE.people[k].name + ': ' + v + ' request' + (v === 1 ? '' : 's') +
-                 '\n' + fmtF(from + i * w.bucket) + ' · ' + bucketLabel + ' bucket</title></circle>';
+          const tip = USAGE.people[k].name + ': ' + v + ' request' + (v === 1 ? '' : 's')
+                    + '\n' + fmtF(from + i * w.bucket) + ' · ' + bucketLabel + ' bucket';
+          out += '<circle class="evt" cx="' + x(i) + '" cy="' + y(v) + '" r="3" fill="' + UCOLOR[k] +
+                 '" data-tip="' + esc(tip) + '"><title>' + esc(tip) + '</title></circle>';
         });
       });
 

@@ -752,6 +752,14 @@ function cell_chip(?int $sev, string $repo, array $running): string
   }
   .filt-tab.off .filt-n { opacity: 0.5; }
   .filt-tab:hover { border-color: var(--accent); }
+  /* All / none — a plain toggle, dashed so it reads as a control over the
+     pills rather than one more category. */
+  .filt-all {
+    font: inherit; font-size: 0.72rem; cursor: pointer; margin-left: 6px;
+    padding: 4px 11px; border-radius: 999px; border: 1px dashed var(--line);
+    background: transparent; color: var(--ink-soft);
+  }
+  .filt-all:hover { border-color: var(--ink-soft); color: var(--ink); }
 
   .tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
   .inst-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1906,6 +1914,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
     <button type="button" class="filt-tab" data-filter="anon">Anonymous</button>
     <button type="button" class="filt-tab" data-filter="bots">Bots</button>
     <button type="button" class="filt-tab" data-filter="claudio">Claudio</button>
+    <button type="button" class="filt-all" data-filter-all>All</button>
   </div>
 
   <div class="kpis" style="margin-bottom:6px">
@@ -2113,14 +2122,17 @@ function cell_chip(?int $sev, string $repo, array $running): string
      * their own lanes — the Other-people crowd and the sandbox visitors.
      */
     const FILTER = { sean: true, anon: true, claudio: true, bots: true };
-    /** A whole lane switched off — its headline and card vanish, not just rows. */
-    function laneOff(lane) {
-      return (!FILTER.sean && lane === 'sean') || (!FILTER.claudio && lane === 'claudio')
-          || (!FILTER.bots && lane === 'bots');
-    }
-    /** This one person is filtered out of every count and row and line. */
+    /**
+     * This one person is filtered out of every count, row and line. Every
+     * filter behaves the SAME way — Sean, 2026-09-06: "hide like anonymous,
+     * not like bots where the whole number disappears". So a filtered lane
+     * keeps its tile and its card; only the people leave, and the tile falls
+     * to 0 rather than vanishing.
+     */
     function personOff(p) {
-      if (laneOff(p.lane)) { return true; }
+      if (!FILTER.sean && p.lane === 'sean') { return true; }
+      if (!FILTER.claudio && p.lane === 'claudio') { return true; }
+      if (!FILTER.bots && p.lane === 'bots') { return true; }
       // The leftover anonymous — not the bots or Claude, which have their own
       // switch and are anonymous by nature.
       return !FILTER.anon && p.anon && p.lane !== 'bots' && p.lane !== 'claudio';
@@ -2320,19 +2332,22 @@ function cell_chip(?int $sev, string $repo, array $running): string
 
       // The lane headlines: hidden when the lane is off this instance OR
       // filtered out wholesale; otherwise recomputed minus what's filtered.
+      // Every lane keeps its tile and its card whatever is filtered — only its
+      // people leave, so the tile falls to 0 and the card to "Nothing logged"
+      // rather than the whole thing vanishing. The instance picker is the only
+      // thing that removes a tile outright.
       const instOK = (el) => { const w = el.dataset.instOnly; return w === 'all' || w === inst; };
       document.querySelectorAll('#tab-usage .kpi[data-kpi-lane]').forEach((kpi) => {
         const lane = kpi.dataset.kpiLane;
-        kpi.hidden = !instOK(kpi) || laneOff(lane);
+        kpi.hidden = !instOK(kpi);
         if (kpi.hidden) { return; }
         kpi.querySelector('.n').textContent = usageTotal(lane, inst, '3d', app).toLocaleString();
         const tag = kpi.querySelector('.kpi-app');
         if (tag) { tag.textContent = app === '*' ? '' : app + ' · '; }
       });
       document.querySelectorAll('#tab-usage .table-card').forEach((card) => {
-        const wholly = laneOff(card.dataset.lane);
-        card.hidden = !instOK(card) || wholly;
-        const any = !wholly && [...card.querySelectorAll('tbody tr[data-key]')].some(tr => !tr.hidden);
+        card.hidden = !instOK(card);
+        const any = [...card.querySelectorAll('tbody tr[data-key]')].some(tr => !tr.hidden);
         const none = card.querySelector('.usage-none'), scroll = card.querySelector('.table-scroll');
         if (none) { none.hidden = any; }
         if (scroll) { scroll.hidden = !any; }
@@ -2341,16 +2356,36 @@ function cell_chip(?int $sev, string $repo, array $running): string
       drawUsage();
     }
 
+    // One place to reflect FILTER into the pills, and to label the all/none
+    // button by what it will DO next: "None" while everything shows, "All"
+    // the moment anything is filtered.
+    const FILT_KEYS = ['sean', 'anon', 'bots', 'claudio'];
+    const allBtn = document.querySelector('.usage-filter [data-filter-all]');
+    function syncFilterUI() {
+      document.querySelectorAll('.usage-filter .filt-tab').forEach(b => b.classList.toggle('off', !FILTER[b.dataset.filter]));
+      if (allBtn) { allBtn.textContent = FILT_KEYS.every(k => FILTER[k]) ? 'None' : 'All'; }
+    }
+
     // The filter pills toggle a category in or out, and repaint everything from
     // the one predicate above. Struck-through == excluded.
     document.querySelectorAll('.usage-filter .filt-tab').forEach((b) => {
       b.addEventListener('click', () => {
-        const key = b.dataset.filter;
-        FILTER[key] = !FILTER[key];
-        b.classList.toggle('off', !FILTER[key]);
+        FILTER[b.dataset.filter] = !FILTER[b.dataset.filter];
+        syncFilterUI();
         applyUsage();
       });
     });
+    // All / none: if anything is filtered, show everything; if all showing,
+    // hide everything.
+    if (allBtn) {
+      allBtn.addEventListener('click', () => {
+        const target = !FILT_KEYS.every(k => FILTER[k]);
+        FILT_KEYS.forEach(k => { FILTER[k] = target; });
+        syncFilterUI();
+        applyUsage();
+      });
+    }
+    syncFilterUI();
 
     document.querySelectorAll('#app-pick .app-tab').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('#app-pick .app-tab').forEach(o => o.classList.remove('on'));

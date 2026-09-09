@@ -12,6 +12,48 @@ function site_theme(): string {
   return isset(THEMES[$t]) ? $t : 'midnight';
 }
 
+/** Relative luminance of a #rrggbb colour (WCAG), for the light/dark decision. */
+function site_hex_lum(string $hex): float {
+  $n  = hexdec(substr($hex, 1));
+  $ch = [($n >> 16) & 255, ($n >> 8) & 255, $n & 255];
+  $lin = array_map(function ($v) {
+    $v /= 255;
+    return $v <= 0.03928 ? $v / 12.92 : (($v + 0.055) / 1.055) ** 2.4;
+  }, $ch);
+  return 0.2126 * $lin[0] + 0.7152 * $lin[1] + 0.0722 * $lin[2];
+}
+
+/**
+ * A session-local custom palette, or null. The /themepicker/ page lets a browser
+ * build a theme that dresses these public pages for THIS browser only — never an
+ * account file and never synced (that is /akisthemes/). It rides in two cookies:
+ * `sitetheme` reads the literal `custom`, and `sitethemevars` carries the twelve
+ * role colours as JSON. Every value lands inside a <style> block, so each is
+ * admitted ONLY as #rrggbb and any unknown or malformed role falls back to
+ * Midnight's — a tampered cookie repaints one role wrong at worst, and can never
+ * inject a byte of CSS. It is the reason the picker's custom themes vanish with the
+ * cookie instead of following the account the way akisthemes' palettes do.
+ */
+function site_custom_vars(): ?array {
+  if ((string) ($_COOKIE['sitetheme'] ?? '') !== 'custom') { return null; }
+  $in = json_decode((string) ($_COOKIE['sitethemevars'] ?? ''), true);
+  if (!is_array($in)) { return null; }
+  $vars = [];
+  foreach (theme_vars('midnight')['vars'] as $role => $fallback) {
+    $v = strtolower((string) ($in[$role] ?? ''));
+    $vars[$role] = preg_match('/^#[0-9a-f]{6}$/', $v) === 1 ? $v : $fallback;
+  }
+  // Light when the page is brighter than mid-grey, so native controls follow.
+  $scheme = site_hex_lum($vars['--bg']) > 0.4 ? 'light' : 'dark';
+  return ['scheme' => $scheme, 'vars' => $vars];
+}
+
+/** The palette the public pages actually wear: the custom cookie if present and
+ *  valid, otherwise the chosen preset. The one place site_page() reads. */
+function site_effective_vars(): array {
+  return site_custom_vars() ?? theme_vars(site_theme());
+}
+
 function site_nav($active) {
   $links = ['' => 'Home', 'projects' => 'Projects', 'about' => 'About', 'contact' => 'Contact', 'themepicker' => 'Themes'];
   // ABSOLUTE, deliberately, and not through suite_base(). The sandboxes are subdomains
@@ -48,7 +90,7 @@ function site_page($active, $title, $bodyHtml) {
   // Root-relative for the same reason as the nav above: on a sandbox subdomain '/' is
   // already that sandbox's home.
   $homeHref = '/';
-  $t = theme_vars(site_theme());
+  $t = site_effective_vars();
   $vars = '';
   foreach ($t['vars'] as $k => $v) { $vars .= "$k: $v; "; }
   $scheme = $t['scheme'];

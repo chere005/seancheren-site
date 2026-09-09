@@ -1302,7 +1302,7 @@ t('About\'s two-column lists line up row for row', function () {
        'and fall to one column below the wrap cap, not at the nav\'s 480');
 });
 
-t('the theme picker shows all four themes, read-only, current marked', function () {
+t('the theme picker shows all four presets, contrast chips, current marked', function () {
     $b = req('GET', '/themepicker/')['body'];
     foreach (THEMES as $key => $row) {
         has('>' . htmlspecialchars($row[0], ENT_QUOTES) . '<', $b, "$key is shown");
@@ -1310,10 +1310,18 @@ t('the theme picker shows all four themes, read-only, current marked', function 
     has('pointer-events: none', $b, 'the previews are inert');
     // Midnight is the default, so its card says Current and carries no Use form.
     has('>Current<', $b, 'the default theme is marked current');
-    eq(count(THEMES) - 1, substr_count($b, 'class="tp-use"'), 'every other theme offers Use');
+    eq(count(THEMES) - 1, substr_count($b, 'name="theme"'), 'every other preset offers a Use form');
+    // The contrast read akisthemes gives is now on this page too — chip containers per
+    // card and the WCAG maths that fills them, flagging under 4.5:1.
+    has('class="tp-ratios"', $b, 'each card carries a contrast-chip container');
+    has('function ratio(', $b, 'and the WCAG ratio maths that fills them');
+    has('r < 4.5', $b, 'anything under 4.5:1 is flagged');
+    // And the workbench: duplicate a preset, or start a new one.
+    has('data-dup', $b, 'presets can be duplicated into a custom theme');
+    has('id="tp-new"', $b, 'a new theme can be started');
 });
 
-t('picking a theme sets the sitetheme cookie and re-dresses the public pages', function () {
+t('picking a preset sets the sitetheme cookie, clears any custom, re-dresses the pages', function () {
     $jar = [];
     $r = req('POST', '/themepicker/', ['action' => 'settheme', 'theme' => 'sage'], $jar);
     eq(302, $r['status'], 'POST→redirect→GET');
@@ -1323,7 +1331,8 @@ t('picking a theme sets the sitetheme cookie and re-dresses the public pages', f
     $ck = implode("\n", array_filter($r['headers'], fn($h) => stripos($h, 'Set-Cookie:') === 0));
     has('path=/', strtolower($ck), 'the cookie names its path');
     $src = file_get_contents(dirname(__DIR__) . '/public/themepicker/index.php');
-    has("['/test/']", $src, 'the cookie path is scoped per instance');
+    has("'/test/'", $src, 'the cookie path is scoped per instance');
+    has("'/dev/'",  $src, 'the dev mirror is scoped too');
     foreach (['/', '/themepicker/'] as $p) {
         $b = req('GET', $p, [], $jar)['body'];
         has('#fefae0', strtolower($b), "$p wears sage");
@@ -1335,6 +1344,58 @@ t('picking a theme sets the sitetheme cookie and re-dresses the public pages', f
     eq(302, $r['status'], 'a bad name still redirects');
     ok(!isset($jar2['sitetheme']), 'and sets no cookie');
     has('#111111', req('GET', '/', [], $jar2)['body'], 'the page stays midnight');
+});
+
+t('a session-local custom palette dresses the public pages, and only this browser', function () {
+    // A full twelve-role palette posted through the apply action. The server rebuilds the
+    // canonical JSON rather than echoing it, so what the cookie carries is what it validated.
+    $pal = [
+        '--bg' => '#123456', '--surface' => '#1b2b3b', '--surface-2' => '#22384a',
+        '--line' => '#2f4a5e', '--line-soft' => '#24394a', '--text' => '#f4f8fb',
+        '--text-dim' => '#c4d2dd', '--muted' => '#8aa0af', '--accent' => '#66ccff',
+        '--accent-ink' => '#04202b', '--accent-soft' => '#123244', '--gold' => '#e6c200',
+    ];
+    $jar = [];
+    $r = req('POST', '/themepicker/', ['action' => 'usecustom', 'vars' => json_encode($pal)], $jar);
+    eq(302, $r['status'], 'apply is POST→redirect→GET too');
+    eq('custom', $jar['sitetheme'] ?? null, 'the sitetheme cookie names the custom');
+    ok(!empty($jar['sitethemevars']), 'and the palette rides in its own cookie');
+    foreach (['/', '/themepicker/', '/about/'] as $p) {
+        $b = req('GET', $p, [], $jar)['body'];
+        has('--bg: #123456', $b, "$p wears the custom background");
+        has('--accent: #66ccff', $b, "$p wears the custom accent");
+        has('content="#123456"', $b, "$p tints the status bar to match");
+        has('color-scheme: dark', $b, "$p reads the dark background as dark");
+    }
+    // A light background flips color-scheme, the same call the presets make.
+    $light = $pal; $light['--bg'] = '#fbf7ea';
+    $jar2 = [];
+    req('POST', '/themepicker/', ['action' => 'usecustom', 'vars' => json_encode($light)], $jar2);
+    has('color-scheme: light', req('GET', '/', [], $jar2)['body'], 'a bright custom page draws light');
+    // Choosing a preset afterwards drops the custom rather than layering over it.
+    req('POST', '/themepicker/', ['action' => 'settheme', 'theme' => 'midnight'], $jar);
+    eq('midnight', $jar['sitetheme'] ?? null, 'the preset wins the sitetheme cookie back');
+    has('--bg: #111111', req('GET', '/', [], $jar)['body'], 'and the pages are midnight again');
+});
+
+t('a tampered custom cookie can never inject CSS', function () {
+    // Break-it-first: every value that is not #rrggbb falls back to Midnight's, so a role
+    // carrying a CSS-injection payload paints Midnight and the payload never reaches a
+    // <style> block. Were the allow-list gone, the raw string below would land in :root.
+    $evil = [
+        '--bg'     => 'red;} body{display:none} .x{',
+        '--accent' => '#66ccff', '--text' => '#ffffff',
+    ];
+    $jar = [];
+    req('POST', '/themepicker/', ['action' => 'usecustom', 'vars' => json_encode($evil)], $jar);
+    $b = req('GET', '/', [], $jar)['body'];
+    hasnt('body{display:none', $b, 'the payload never reaches the page');
+    has('--bg: #111111', $b, 'the poisoned role falls back to Midnight');
+    quiet($b, 'and the page is still quiet');
+    // A malformed vars cookie (not even JSON) is ignored: the pages fall back to the preset.
+    $jar2 = ['sitetheme' => 'custom', 'sitethemevars' => 'not json at all'];
+    $b2 = req('GET', '/', [], $jar2)['body'];
+    has('--bg: #111111', $b2, 'an unparseable custom cookie leaves midnight in place');
 });
 
 t('the sitetheme cookie never reaches the apps', function () {

@@ -1,0 +1,76 @@
+# seancheren.com — please don't scrape.
+#
+# robots.txt is a request, not a fence: well-behaved crawlers honour it, and
+# the AI/LLM training and scraping bots below have all published the agent
+# names they say they read here. Ordinary search engines are left alone, so
+# the site still turns up in a normal search — only the bulk harvesters and
+# model-training crawlers are asked to stay out.
+#
+# Served from one tree across prod, test and dev, so the sandboxes are asked
+# off too. To lock the whole site out of search as well, replace the blocks
+# below with a single:  User-agent: *  /  Disallow: /
+
+# --- AI / LLM training and scraping crawlers: stay out entirely ---
+User-agent: GPTBot
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: Perplexity-User
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: Timpibot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+# --- everyone else (ordinary search included): crawl freely ---
+User-agent: *
+Disallow:

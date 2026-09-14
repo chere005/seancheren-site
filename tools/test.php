@@ -1223,6 +1223,20 @@ t('every public page renders for a stranger', function () {
     }
 });
 
+t('robots.txt asks the scraper bots off and leaves ordinary search alone', function () {
+    $r = req('GET', '/robots.txt');
+    eq(200, $r['status'], 'robots.txt is served');
+    $b = $r['body'];
+    // Each AI / model-training crawler is named and disallowed the whole site.
+    foreach (['GPTBot', 'ClaudeBot', 'CCBot', 'Google-Extended', 'PerplexityBot', 'Bytespider'] as $bot) {
+        has("User-agent: $bot", $b, "$bot is named");
+    }
+    ok(substr_count($b, 'Disallow: /') >= 10, 'each named crawler is disallowed the whole site');
+    // …but ordinary search is left alone: the catch-all agent may crawl freely.
+    ok(preg_match('/User-agent: \*\s*\nDisallow:\s*(\n|$)/', $b) === 1,
+       'the wildcard agent is allowed to crawl (empty Disallow)');
+});
+
 
 t('the public pages are the same shell', function () {
     foreach (['/about/', '/projects/', '/contact/', '/themepicker/'] as $p) {

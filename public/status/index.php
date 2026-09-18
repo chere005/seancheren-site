@@ -1010,7 +1010,7 @@ function cell_chip(?int $sev, string $repo, array $running): string
   $slots = count(array_filter($repos, fn($r) => in_array($r['plat']['ios'][0] ?? null, [0, SEV_BUILT], true)));
   ?>
   <div class="kpis">
-    <div class="kpi"><span class="n"><?= $inGroup('mindsuite') ?></span><span class="l">MindSuite repos &middot; <?= $inGroup('developer') ?> developer &middot; <?= $inGroup('website') ?> website</span></div>
+    <div class="kpi"><span class="n"><?= $inGroup('mindsuite') ?></span><span class="l">MindSuite repos &middot; <?= $inGroup('sandbox') ?> sandbox &middot; <?= $inGroup('developer') ?> developer &middot; <?= $inGroup('website') ?> website</span></div>
     <div class="kpi"><span class="n"><?= $ofKind('server') ?></span><span class="l">apps syncing through a server<?= $ofKind('login') ? ' &middot; ' . $ofKind('login') . ' signing in to one' : '' ?></span></div>
     <div class="kpi"><span class="n"><?= $ofKind('local') ?></span><span class="l">app<?= $ofKind('local') === 1 ? '' : 's' ?> syncing local-only, via Bonjour</span></div>
     <div class="kpi"><span class="n"><?= $androidOk ?> / <?= $androidAll ?></span><span class="l">apps building &amp; running on Android</span></div>

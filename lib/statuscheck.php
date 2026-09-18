@@ -42,7 +42,12 @@ $PLATFORMS = [
 // then MindSuite (not Mind-Suite), then developer".
 $REPO_GROUPS = [
     'website'   => ['Website', 'Served from the seancheren.com account.'],
-    'mindsuite' => ['MindSuite', 'Six repos and the apps they ship.'],
+    'mindsuite' => ['MindSuite', 'Seven repos and the apps they ship.'],
+    // The Test* forks: the same apps, built from ~/CLAUDIO/TestMindSuite,
+    // installed beside the real ones and served from test.seancheren.com.
+    // Their web probes live under MindSuite's test lane; these rows are the
+    // apps themselves. Sean, 2026-09-18: "add all apps to status".
+    'sandbox'   => ['Sandbox', 'The Test* forks — the real apps\' twins, beside them on every device.'],
     'developer' => ['Developer', 'Tooling. Nothing ships to a device.'],
 ];
 
@@ -157,12 +162,55 @@ $repos = [
      'macos' => [null, '&mdash;'], 'windows' => [null, '&mdash;'],
      'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
    ]],
+  ['name' => 'WriteMind', 'group' => 'mindsuite', 'tag' => 'notes and a camera',
+   'sync' => 'none — Markdown files in <code>~/Documents/WriteMind</code>',
+   'sync_kind' => 'none',
+   'plat' => [
+     'web'     => [null, 'none'],
+     'macos'   => [1, 'in progress', 'SwiftUI &middot; another agent&rsquo;s, Sep 18'],
+     'windows' => [null, '&mdash;'],
+     'ios' => [null, '&mdash;'], 'watchos' => [null, '&mdash;'], 'android' => [null, '&mdash;'],
+   ]],
   ['name' => 'CoreMind', 'group' => 'mindsuite', 'tag' => 'shared tooling',
    'sync' => 'none',
    'sync_kind' => 'none',
    'plat' => [
      'web' => [null, 'n/a'], 'macos' => [null, 'n/a'], 'windows' => [null, 'n/a'],
      'ios' => [null, 'n/a'], 'watchos' => [null, 'n/a'], 'android' => [null, 'n/a'],
+   ]],
+
+  ['name' => 'TestCalMind', 'group' => 'sandbox', 'tag' => 'CalMind\'s fork',
+   'sync' => '<code>test.seancheren.com/calmind/api/index.php</code><br><code>records</code> space',
+   'sync_kind' => 'server',
+   'plat' => [
+     'web'     => [0, 'test.seancheren.com/calmind'],
+     'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/TestCalMind.app</span><br>Tauri &middot; Sep 18'],
+     'windows' => [null, '&mdash;'],
+     'ios'     => [SEV_BUILT, 'built', 'iPhoooooone &middot; Sep 18'],
+     'watchos' => [null, 'never', 'the sandbox does not deploy to a watch'],
+     'android' => [0, 'verified', 'local emulator<br>Sep 18'],
+   ]],
+  ['name' => 'TestChefMind', 'group' => 'sandbox', 'tag' => 'ChefMind\'s fork',
+   'sync' => '<code>test.seancheren.com/calmind/api/index.php</code><br><code>chef</code> space',
+   'sync_kind' => 'server',
+   'plat' => [
+     'web'     => [0, 'test.seancheren.com/ChefMind'],
+     'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/TestChefMind.app</span><br>Tauri &middot; Sep 18'],
+     'windows' => [null, '&mdash;'],
+     'ios'     => [SEV_BUILT, 'built', 'iPhoooooone &middot; Sep 18'],
+     'watchos' => [null, '&mdash;'],
+     'android' => [0, 'verified', 'local emulator<br>Sep 18'],
+   ]],
+  ['name' => 'TestAcctMind', 'group' => 'sandbox', 'tag' => 'AcctMind\'s fork',
+   'sync' => 'none — ledger in the browser',
+   'sync_kind' => 'none',
+   'plat' => [
+     'web'     => [0, 'test.seancheren.com/AcctMind'],
+     'macos'   => [0, 'desktop app', '<span class="nowrap">/Applications/TestAcctMind.app</span><br>Tauri &middot; Sep 18'],
+     'windows' => [null, '&mdash;'],
+     'ios'     => [SEV_BUILT, 'built', 'iPhoooooone &middot; Sep 18'],
+     'watchos' => [null, '&mdash;'],
+     'android' => [0, 'verified', 'local emulator<br>Sep 18'],
    ]],
 
   ['name' => 'AgentSuite', 'group' => 'developer', 'tag' => 'conventions',

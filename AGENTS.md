@@ -10,7 +10,7 @@ and is imported here; this file holds only what is true of THIS repo.
 
 What's here:
 
-- **The public front** — Home, Projects, About, Contact, and the Themes picker. No login, no chrome from the apps; they share `lib/site.php`.
+- **The public front** — Home, Projects, Blog, About, Contact, and the Themes picker. No login, no chrome from the apps; they share `lib/site.php`.
 - **Chat** (`public/chat/`) — deliberately public, no login.
 - **Aki's Bookshelf** (`public/akisbookshelf/`) — behind the login, then gated to the `aki` account. Books from the Open Library API, per-book notes, its own themes.
 - **The themes workbench** (`public/akisthemes/`) — behind the login, then gated to `aki` and `sean`. For building colour palettes. Deliberately wired to nothing.
@@ -71,7 +71,7 @@ Local login: users come from `lib/config.php` (gitignored; copy `lib/config.samp
 
 **Every instance has separate logins and separate sessions.** *Accounts:* with `users` unset, `app_users()` sees only what signed up into that instance's own `accounts.json` — you make a sandbox account through that sandbox's own signup flow (code `5678`, while mail is stubbed). *Sessions:* prod and `/test/` and `/dev/` all live on one domain, and a cookie set at path `/` is sent to every path beneath it — so the cookie **name** is the only thing that actually separates them. `session_cookie_name()` (`lib/auth.php`) derives one from `base` (`SCSESS_TEST`, `SCSESS_DEV`); **production deliberately keeps PHP's own `PHPSESSID` and its default session store**, because renaming its cookie would sign everyone out for nothing. `session_store_dir()` gives each sandbox its own `sessions/` inside its own data dir, and its cookie path is narrowed to its base.
 
-**The public top-level pages** (Home `/`, `projects/`, `about/`, `contact/`, `themepicker/`) are the site's marketing front: no login, no `chrome.php`. They share their own chrome through `lib/site.php` — `site_nav($active)` renders the pill nav (and its phone-width `<details>` dropdown) and `site_page($active, $title, $bodyHtml)` wraps a page in the full HTML shell (dark theme: `#111`/`#eee`/`#34d399`), with **the site's logo — a cursive SC (`.sitelogo`, Savoye LET, accent-coloured) — centred above the nav** and the baked icons linked (`/favicon-32.png`, `/apple-touch-icon.png`). Add a page by calling `site_page()` and adding its slug to the `$links` map in `site_nav()`.
+**The public top-level pages** (Home `/`, `projects/`, `blog/`, `about/`, `contact/`, `themepicker/`) are the site's marketing front: no login, no `chrome.php`. They share their own chrome through `lib/site.php` — `site_nav($active)` renders the pill nav (and its phone-width `<details>` dropdown) and `site_page($active, $title, $bodyHtml)` wraps a page in the full HTML shell (dark theme: `#111`/`#eee`/`#34d399`), with **the site's logo — a cursive SC (`.sitelogo`, Savoye LET, accent-coloured) — centred above the nav** and the baked icons linked (`/favicon-32.png`, `/apple-touch-icon.png`). Add a page by calling `site_page()` and adding its slug to the `$links` map in `site_nav()`.
 
 ## Core mechanics
 

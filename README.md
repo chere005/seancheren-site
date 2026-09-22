@@ -11,7 +11,7 @@ essentially all of the code, and the rest of this readme.**
 
 ## What's here
 
-- **The public front** — Home, Projects, About, Contact and a Themes picker, sharing one
+- **The public front** — Home, Projects, Blog, About, Contact and a Themes picker, sharing one
   shell (`lib/site.php`). No login.
 - **Chat** — deliberately public, no login.
 - **Aki's Bookshelf** — behind the login, then gated to one account. Books from the Open

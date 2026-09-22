@@ -388,7 +388,7 @@ area('pages');
 
 
 t('the public pages need no login', function () {
-    foreach (['/', '/about/', '/projects/', '/contact/', '/themepicker/', '/chat/'] as $p) {
+    foreach (['/', '/about/', '/projects/', '/blog/', '/contact/', '/themepicker/', '/chat/'] as $p) {
         $r = req('GET', $p);
         eq(200, $r['status'], "$p status");
         hasnt('Fatal error', $r['body'], $p);
@@ -1214,7 +1214,7 @@ t('the bookshelf theme and the suite theme are separate settings', function () {
 area('site');
 
 t('every public page renders for a stranger', function () {
-    foreach (['/', '/about/', '/projects/', '/contact/', '/themepicker/'] as $p) {
+    foreach (['/', '/about/', '/projects/', '/blog/', '/contact/', '/themepicker/'] as $p) {
         $r = req('GET', $p);
         eq(200, $r['status'], "$p status");
         hasnt('name="password"', $r['body'], "$p must not ask for a login");
@@ -1239,11 +1239,27 @@ t('robots.txt asks the scraper bots off and leaves ordinary search alone', funct
 
 
 t('the public pages are the same shell', function () {
-    foreach (['/about/', '/projects/', '/contact/', '/themepicker/'] as $p) {
+    foreach (['/about/', '/projects/', '/blog/', '/contact/', '/themepicker/'] as $p) {
         $b = req('GET', $p)['body'];
         has('<!DOCTYPE html', $b, "$p is a whole document");
         has('#34d399', strtolower($b), "$p carries the suite accent");
     }
+});
+
+t('the blog carries its one hardcoded entry, and the nav carries the blog', function () {
+    $b = req('GET', '/blog/')['body'];
+    has('<h1>Blog</h1>', $b, 'the page names itself');
+    has('Hello, World!', $b, 'the entry is there');
+    // The entry is HTML in the page, not a store: nothing here should start
+    // reading a data dir without the test below being changed on purpose.
+    has('class="post"', $b, 'and it is marked up as a post');
+    // Both navs — the pill row and the phone dropdown — list every page, so
+    // the link appears twice on every public page, not just on this one.
+    foreach (['/', '/blog/', '/about/'] as $p) {
+        eq(2, substr_count(req('GET', $p)['body'], '>Blog</a>'),
+           "$p lists the blog in both navs");
+    }
+    has('<a href="/blog/" class="on">Blog</a>', $b, 'and the blog marks itself current');
 });
 
 t('projects lists the theme picker and CalMind with their links', function () {
@@ -1374,7 +1390,7 @@ t('a session-local custom palette dresses the public pages, and only this browse
     eq(302, $r['status'], 'apply is POST→redirect→GET too');
     eq('custom', $jar['sitetheme'] ?? null, 'the sitetheme cookie names the custom');
     ok(!empty($jar['sitethemevars']), 'and the palette rides in its own cookie');
-    foreach (['/', '/themepicker/', '/about/'] as $p) {
+    foreach (['/', '/themepicker/', '/about/', '/blog/'] as $p) {
         $b = req('GET', $p, [], $jar)['body'];
         has('--bg: #123456', $b, "$p wears the custom background");
         has('--accent: #66ccff', $b, "$p wears the custom accent");

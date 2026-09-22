@@ -1,5 +1,5 @@
 <?php
-// Shared chrome for the static top-level pages (Home, Projects, About, Contact, Themes).
+// Shared chrome for the static top-level pages (Home, Projects, Blog, About, Contact, Themes).
 // Wears one of the suite's THEMES (lib/auth.php), chosen per browser by the `sitetheme`
 // cookie from /themepicker/ — midnight (the original #111/#eee/#34d399 look) by default.
 // The cookie only dresses these pages; the apps keep their own per-user theme prefs.
@@ -55,7 +55,7 @@ function site_effective_vars(): array {
 }
 
 function site_nav($active) {
-  $links = ['' => 'Home', 'projects' => 'Projects', 'about' => 'About', 'contact' => 'Contact', 'themepicker' => 'Themes'];
+  $links = ['' => 'Home', 'projects' => 'Projects', 'blog' => 'Blog', 'about' => 'About', 'contact' => 'Contact', 'themepicker' => 'Themes'];
   // ABSOLUTE, deliberately, and not through suite_base(). The sandboxes are subdomains
   // now (test.seancheren.com), and .htaccess rewrites /X there to /test/X internally —
   // so a root-relative link already lands inside the sandbox, and prefixing it would

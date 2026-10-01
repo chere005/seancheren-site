@@ -1734,6 +1734,39 @@ t('deploy.sh parses', function () use ($root) {
     eq(0, $rc, 'bash -n: ' . implode("\n", $o));
 });
 
+t('the release lane survives its own beat, and a signal ends it', function () use ($root) {
+    // tools/dtp.sh, both found 2026-10-01. Its beat_stop was `[ -n "$BEAT_PID" ] &&
+    // { kill …; wait …; }` — the brace group last in an AND list, the one place `set -e`
+    // still applies — and `wait` on the beat it just killed returns 143: every standalone
+    // run died right after its push, and the EXIT trap died the same way before closing
+    // the status card. And one trap served EXIT, INT and TERM; a signal trap that returns
+    // RESUMES the script, so a ^C in the test run went on to "tests failed" and a second
+    // finish, and a TERM in the deploy went on to tag and push.
+    $f = $root . '/tools/dtp.sh';
+    $s = (string) file_get_contents($f);
+    exec('sh -n ' . escapeshellarg($f) . ' 2>&1', $o, $rc);
+    eq(0, $rc, 'sh -n: ' . implode("\n", $o));
+    // The lane's own beat_stop, run rather than read: under set -e, on this machine's
+    // /bin/sh, against a beat it really has to kill. Either shape is found — one line or
+    // a block — so the old one fails here on what it DOES, not on how it was spelled.
+    ok(preg_match('/^[ \t]*beat_stop\(\) \{[^\n]*\}[ \t]*$/m', $s, $fn) === 1
+        || preg_match('/^[ \t]*beat_stop\(\) \{\n.*?^[ \t]*\}[ \t]*$/ms', $s, $fn) === 1, 'found beat_stop()');
+    $o = [];
+    exec('sh -c ' . escapeshellarg("set -e\n" . ($fn[0] ?? '') . "\n"
+        . "( while :; do sleep 1; done ) >/dev/null 2>&1 &\nBEAT_PID=\$!\nbeat_stop\necho survived") . ' 2>&1', $o, $rc);
+    eq('survived', implode("\n", $o), 'the lane outlives beat_stop under set -e');
+    // EXIT is trapped alone; INT and TERM close the card and die of their own signal.
+    // The signal list is what follows the quoted action, never words inside it.
+    preg_match_all("/^[ \\t]*trap[ \\t]+(?:'[^']*'|\"[^\"]*\"|\\S+)[ \\t]+([A-Z0-9 \\t]+)$/m", $s, $traps);
+    foreach ($traps[1] as $sigs) {
+        ok(!preg_match('/\bEXIT\b/', $sigs) || !preg_match('/\b(INT|TERM)\b/', $sigs),
+           "one trap serves EXIT and a signal: $sigs");
+    }
+    ok(count($traps[1]) >= 3, 'found the lane\'s three traps');
+    has("trap 'lane_stopped; trap - EXIT INT; kill -s INT \$\$; exit 130' INT", $s, 'INT re-raises');
+    has("trap 'lane_stopped; trap - EXIT TERM; kill -s TERM \$\$; exit 143' TERM", $s, 'TERM re-raises');
+});
+
 t('an empty array expansion never trips set -u', function () use ($root) {
     // macOS ships bash 3.2, where "${a[@]}" on an EMPTY array counts as unset and the
     // scripts' `set -u` kills the run mid-deploy. The exclude array is only non-empty on

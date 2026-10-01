@@ -280,6 +280,13 @@ prod one, a bare expansion breaks `prod`/`both` while every test deploy, dry run
 sails through. The guarded `${a[@]+"${a[@]}"}` is pinned by text, and the idiom itself is
 proved against the machine's own bash.
 
+`tools/dtp.sh`, the release lane, gets the same treatment rather than a run: it parses; its
+own `beat_stop()` is lifted out and run under `set -e` on `/bin/sh` against a beat it has to
+kill, and must leave the shell alive (the old shape's `wait` returned 143 and killed every
+standalone lane right after its push, card left "running"); and no trap serves EXIT
+together with a signal — INT and TERM must close the card and re-raise their own signal,
+because a signal trap that returns resumes the script.
+
 ## What only eyes can check
 
 Everything below is real and none of it is automated. **Every bug reported in the session

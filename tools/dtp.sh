@@ -39,12 +39,52 @@ fi
 REPORTER="${MIND_DIR:-$(cd .. && pwd)}/CoreMind/bin/report-status.sh"
 RUN_ID=""
 REPORT_DONE=0
+BEAT_PID=""
+# ERREXIT-PROOF, and it was not. The first shape — `[ -n "$BEAT_PID" ] &&
+# { kill …; wait …; }` — put the brace group LAST in an AND list, the one
+# place `set -e` still applies, and `wait` on the beat just killed returns
+# 143: every standalone run since the beat arrived (2026-09-06) died right
+# after its push, and the EXIT trap died the same way inside this function, so
+# the card was left purple at "running" and the lane ended 1. The app lanes
+# lost that shape on 2026-09-15 and this one never did (found 2026-10-01);
+# lane_stopped below calls this first, so the Ctrl-C fix needs it too.
+beat_stop() {
+  if [ -n "$BEAT_PID" ]; then
+    kill "$BEAT_PID" >/dev/null 2>&1 || true
+    wait "$BEAT_PID" 2>/dev/null || true
+    BEAT_PID=""
+  fi
+  return 0
+}
+# THE LANE'S WAY OUT, on EXIT and on a signal alike, and the one place the
+# card is closed `failed`. EXACTLY ONCE: REPORT_DONE goes to 1 BEFORE the
+# reporter runs, so the EXIT after a signal, a second ^C, and the foot of the
+# lane all find the card already closed.
+lane_stopped() {
+  beat_stop
+  if [ -n "$RUN_ID" ] && [ "$REPORT_DONE" != 1 ]; then
+    REPORT_DONE=1
+    sh "$REPORTER" finish "$RUN_ID" failed 3 "stopped before finishing" >/dev/null 2>&1 || true
+  fi
+  return 0
+}
 if [ -f "$REPORTER" ]; then
   KIND=dtp; [ "$FULL" = 1 ] && KIND=tdtp
   RUN_ID=$(sh "$REPORTER" start "$KIND" seancheren-site 2>/dev/null || true)
-  BEAT_PID=""
-  beat_stop() { [ -n "$BEAT_PID" ] && { kill "$BEAT_PID" >/dev/null 2>&1; wait "$BEAT_PID" 2>/dev/null; }; BEAT_PID=""; return 0; }
-  trap 'beat_stop; if [ -n "$RUN_ID" ] && [ "$REPORT_DONE" != 1 ]; then sh "$REPORTER" finish "$RUN_ID" failed 3 "stopped before finishing" >/dev/null 2>&1 || true; fi' EXIT INT TERM
+  # A lane that dies anywhere — a failed deploy, a refused push, a Ctrl-C —
+  # must not leave the site purple on the page for ever.
+  #
+  # AND A CTRL-C MUST END IT. This was one trap for EXIT, INT and TERM, and a
+  # signal trap that returns RESUMES the script: ^C during the tdtp test run
+  # closed the card `failed`, then printed "tests failed — nothing shipped"
+  # and closed it again; under TERM during the deploy the lane went on to tag
+  # and push, "dtp done", the card closed failed and then ok (found
+  # 2026-10-01). So INT and TERM close the card and then die of their own
+  # signal, as an untrapped shell would — and as the app lanes' handlers do.
+  # `exit 130` would read to a caller as a child that handled the ^C.
+  trap 'lane_stopped' EXIT
+  trap 'lane_stopped; trap - EXIT INT; kill -s INT $$; exit 130' INT
+  trap 'lane_stopped; trap - EXIT TERM; kill -s TERM $$; exit 143' TERM
   # A BEAT A MINUTE — Sean, 2026-09-07: "make sure during dtp that status is
   # updated every minute at least". start/finish alone leave the card frozen at
   # "running" through a multi-minute build; a beat every 60s keeps the page
@@ -98,7 +138,7 @@ git push --atomic --follow-tags origin main "$NEW" || {
   exit 1
 }
 
-[ -n "$RUN_ID" ] && beat_stop
+beat_stop
 REPORT_DONE=1
 if [ -n "$RUN_ID" ]; then
   sh "$REPORTER" finish "$RUN_ID" ok 0 "$NEW live on prod, test and dev" >/dev/null 2>&1 || true

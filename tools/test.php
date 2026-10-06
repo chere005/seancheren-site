@@ -1436,6 +1436,36 @@ t('the sitetheme cookie never reaches the apps', function () {
     // check is what :root actually wears, not whether sage's hex appears anywhere.
     has('--bg: #111111', $b, 'the app keeps its own per-user theme');
 });
+
+t('the alternate domains 301 to seancheren.com, and nothing else does', function () use ($root) {
+    // php -S never reads .htaccess, so the rule is checked as text — but the HOST
+    // PATTERN is lifted out and actually run, because an alternation that let
+    // seancheren.com through would 301 the real site to itself, and a grep for the
+    // rule's spelling would pass just as happily either way.
+    $ht = (string) file_get_contents($root . '/public/.htaccess');
+    has('RewriteRule ^ https://seancheren.com%{REQUEST_URI} [R=301,L]', $ht,
+        'the redirect is absolute, https, permanent, and keeps the path');
+    $line = '';
+    foreach (explode("\n", $ht) as $l) {
+        if (strpos($l, 'HTTP_HOST') !== false && strpos($l, 'ncheren') !== false) { $line = $l; break; }
+    }
+    ok($line !== '', 'the alternate-domain host condition is in the file');
+    ok(preg_match('/HTTP_HOST\}\s+(\S+)\s+\[NC\]/', $line, $m) === 1, 'its pattern can be read out');
+    $pat = '/' . $m[1] . '/i';
+    foreach (['ncheren.com', 'www.ncheren.com', 'cheren.net', 'www.cheren.net',
+              'cheren.space', 'www.cheren.space', 'cheren.org', 'www.cheren.org'] as $h) {
+        ok(preg_match($pat, $h) === 1, "$h is redirected");
+    }
+    foreach (['seancheren.com', 'www.seancheren.com', 'test.seancheren.com',
+              'dev.seancheren.com', 'seancheren.nfshost.com', 'cheren.com'] as $h) {
+        ok(preg_match($pat, $h) === 0, "$h is NOT redirected");
+    }
+    // The ACME path is exempt or the certificates stop renewing, and https on four
+    // domains goes with them — months after whoever removed the line moved on.
+    hasnt('!^/\.well-known/', str_replace('!^/\.well-known/', '', $ht, $n), '');
+    ok($n === 1, 'the ACME challenge path is exempt from the redirect');
+});
+
 area('usage');
 
 t('operations leave one line each — and never any content', function () {

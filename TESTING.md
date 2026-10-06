@@ -256,6 +256,17 @@ step), and the lists fall to one column below 640px — the width `.wrap` caps a
 which the columns narrow and a wrapped title steps its column past the other's. Both are
 pinned as CSS text; the alignment itself is by eye, the harness running no layout.
 
+The four alternate domains — `ncheren.com`, `cheren.net`, `cheren.space`, `cheren.org`,
+each with its `www` — 301 to `seancheren.com` with the path kept, and `seancheren.com`
+itself, its `www`, the two sandbox subdomains and the `nfshost.com` name do not. That one
+is `.htaccess` text, since `php -S` reads no rewrite rules — but the host pattern is
+lifted out of the file and actually run against both lists, because a grep for the rule's
+spelling passes identically whether or not the alternation has let the real site into it.
+The `/.well-known/` exemption is asserted for the same reason it exists: without it an
+ACME renewal answers the validator with a redirect, and four certificates lapse months
+after the line goes. **Whether the redirect truly fires is by eye** — Apache is not in
+this harness; `curl -sI https://ncheren.com/` after a deploy is the proof.
+
 ### `deploy`
 Static checks on `deploy.sh`, because a deploy is the one thing here that can destroy data
 and the one thing a test run may never actually perform. It parses; no `rsync` line uses

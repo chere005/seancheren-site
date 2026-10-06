@@ -15,6 +15,32 @@ ServerSignature Off
 # itself and loop.
 RewriteEngine On
 
+# ── The alternate domains are not the site (Sean, 2026-10-05) ───────────────
+#
+# ncheren.com, cheren.net, cheren.space and cheren.org, each with its www, are
+# ALIASes on this account, and an alias serves this one /home/public directly:
+# before this rule all five domains answered 200 with the same pages, which is
+# five addresses for one site and nothing saying which is the real one. They
+# 301 to seancheren.com instead, path and query string intact.
+#
+# FIRST in the file, ahead of the CalMind spelling and the sandbox routing, so
+# an alternate-domain request leaves before another rule can add a second hop.
+#
+# /.well-known/ is exempt: NFSN renews these certificates through an ACME
+# challenge served from that path, and a 301 there answers the validator with a
+# redirect to a host it did not ask about. They have certificates today; those
+# expire, and a renewal that quietly fails takes the domain's https with it.
+#
+# Absolute, with https written out, for the reason the /request rule below
+# spells out: NFSN terminates TLS and forwards plain http, so a path-only
+# target bounces an https visitor out through plaintext. And %{REQUEST_URI}
+# rather than a captured $1 because THIS FILE ALSO RUNS inside /home/public/
+# test/ and /dev/, where the per-directory path has already had that prefix
+# stripped; REQUEST_URI is the whole path in either context.
+RewriteCond %{HTTP_HOST} ^(www\.)?(ncheren\.com|cheren\.(net|space|org))$ [NC]
+RewriteCond %{REQUEST_URI} !^/\.well-known/
+RewriteRule ^ https://seancheren.com%{REQUEST_URI} [R=301,L]
+
 # ── /CalMind is the canonical spelling (Sean, 2026-08-22) ───────────────────
 #
 # Served by a SYMLINK on the host, not by a rule here: /home/public/CalMind ->
